@@ -51,7 +51,6 @@ class ViewRequest:
     width_px: int
     streams: tuple[StreamView, ...] = ()
     cursor_ns: int = 0
-    height_px: int | None = None
     direction: int = 1
     playing: bool = False
     jumped: bool = False

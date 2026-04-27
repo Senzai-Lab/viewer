@@ -29,16 +29,6 @@ class StreamAdapter(Protocol):
     ) -> Any: ...
 
 
-def _dedupe(values: list[ChunkKey]) -> list[ChunkKey]:
-    seen: set[ChunkKey] = set()
-    out: list[ChunkKey] = []
-    for value in values:
-        if value not in seen:
-            seen.add(value)
-            out.append(value)
-    return out
-
-
 class ChunkManager:
     """
     Threaded chunk cache shared by all adapters.
@@ -116,7 +106,7 @@ class ChunkManager:
         plan: dict[str, tuple[StreamView, list[ChunkKey], list[ChunkKey]]] = {}
         for stream in streams:
             adapter = self._adapters[stream.stream_id]
-            visible = _dedupe(adapter.visible_keys(request, stream))
+            visible = list(dict.fromkeys(adapter.visible_keys(request, stream)))
             prefetch = self._prefetch_keys(adapter, request, visible)
             plan[stream.stream_id] = (stream, visible, prefetch)
 
@@ -128,14 +118,11 @@ class ChunkManager:
                 self._working[stream_id] = set(visible) | set(prefetch)
 
             # Round-robin enqueue: order-0 across all streams, then order-1, ...
-            for band, band_name in enumerate(("visible", "prefetch")):
-                max_len = max(
-                    (len(p[1] if band_name == "visible" else p[2]) for p in plan.values()),
-                    default=0,
-                )
+            for band, key_field in enumerate((1, 2)):  # 1=visible, 2=prefetch in plan tuple
+                max_len = max((len(p[key_field]) for p in plan.values()), default=0)
                 for order in range(max_len):
-                    for stream_id, (_, visible, prefetch) in plan.items():
-                        keys = visible if band_name == "visible" else prefetch
+                    for stream_id, entry in plan.items():
+                        keys = entry[key_field]
                         if order >= len(keys):
                             continue
                         key = keys[order]
@@ -213,14 +200,13 @@ class ChunkManager:
         if budget is None or self._total_bytes <= budget:
             return
 
-        candidates = list(self._loaded.items())
-        for composite, chunk in candidates:
+        for composite in list(self._loaded):
             if self._total_bytes <= budget:
                 return
             stream_id, key = composite
             if key in self._working[stream_id]:
                 continue
-            self._loaded.pop(composite, None)
+            chunk = self._loaded.pop(composite)
             self._total_bytes -= chunk.nbytes
 
     def _worker(self) -> None:

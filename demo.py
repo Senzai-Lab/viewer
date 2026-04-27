@@ -151,7 +151,6 @@ def build_app(state: AppState):
         plot_width = max(1, int(imgui.get_content_region_avail().x))
         viewport = controller.viewport(
             width_px=plot_width,
-            height_px=220,
             streams=state.stream_views,
         )
         frames = state.session.update(viewport)

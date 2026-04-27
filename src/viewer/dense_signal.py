@@ -78,13 +78,10 @@ class DenseSignalAdapter:
         return self._ns_to_sample(timestamp_ns) // self.chunk_samples
 
     def _key(self, chunk_index: int) -> ChunkKey:
-        return f"{self.stream_id}/{chunk_index:0{self._key_width}d}"
+        return f"{chunk_index:0{self._key_width}d}"
 
     def _index_for_key(self, key: ChunkKey) -> int:
-        prefix, _, suffix = key.rpartition("/")
-        if prefix != self.stream_id:
-            raise ValueError(f"key {key!r} does not belong to {self.stream_id!r}")
-        index = int(suffix)
+        index = int(key)
         if not 0 <= index < self._chunk_count:
             raise ValueError(f"chunk index {index} out of range")
         return index

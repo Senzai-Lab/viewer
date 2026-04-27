@@ -117,13 +117,11 @@ class PlaybackController:
         self,
         *,
         width_px: int,
-        height_px: int | None = None,
         streams: tuple[StreamView, ...] = (),
     ) -> ViewRequest:
         request = ViewRequest(
             time=self.visible_range,
             width_px=int(width_px),
-            height_px=None if height_px is None else int(height_px),
             streams=tuple(streams),
             cursor_ns=self.cursor_ns,
             direction=1 if self.playback_speed >= 0 else -1,
