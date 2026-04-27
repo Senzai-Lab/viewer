@@ -25,7 +25,7 @@ class BinarySignalAdapter(DenseSignalAdapter):
         dtype: str | np.dtype,
         channel_count: int,
         sample_rate_hz: float,
-        start_time: float = 0.0,
+        start_time_ns: int = 0,
         target_chunk_bytes: int = 8 * 1024 * 1024,
         byte_offset: int = 0,
     ):
@@ -67,6 +67,6 @@ class BinarySignalAdapter(DenseSignalAdapter):
             stream_id,
             channel_first,
             sample_rate_hz,
-            start_time=start_time,
+            start_time_ns=start_time_ns,
             target_chunk_bytes=target_chunk_bytes,
         )
