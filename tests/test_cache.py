@@ -141,3 +141,42 @@ def test_close_is_idempotent():
     mgr = ChunkManager([StubAdapter("a")])
     mgr.close()
     mgr.close()
+
+
+def test_clear_flushes_loaded_state():
+    adapter = StubAdapter("a", n_chunks=6, nbytes_per_chunk=1024)
+    mgr = ChunkManager([adapter])
+    try:
+        request = make_request(0, 3000, "a")
+        drain(mgr, request)
+        assert mgr.loaded_bytes == 3 * 1024
+        assert mgr.loaded_chunk_count == 3
+
+        mgr.clear()
+
+        assert mgr.loaded_bytes == 0
+        assert mgr.loaded_chunk_count == 0
+        assert mgr.pending_chunk_count == 0
+        assert mgr.working_chunk_count == 0
+    finally:
+        mgr.close()
+
+
+def test_stream_debug_stats_report_per_stream_details():
+    a = StubAdapter("a", n_chunks=4, nbytes_per_chunk=1024)
+    b = StubAdapter("b", n_chunks=4, nbytes_per_chunk=2048)
+    mgr = ChunkManager([a, b], max_workers=2)
+    try:
+        request = make_request(0, 2000, "a", "b")
+        drain(mgr, request)
+
+        stats = mgr.stream_debug_stats()
+
+        assert stats["a"].loaded_chunk_count == 2
+        assert stats["a"].loaded_bytes == 2 * 1024
+        assert stats["a"].loaded_keys == ("0000", "0001")
+        assert stats["b"].loaded_chunk_count == 2
+        assert stats["b"].loaded_bytes == 2 * 2048
+        assert stats["b"].loaded_keys == ("0000", "0001")
+    finally:
+        mgr.close()

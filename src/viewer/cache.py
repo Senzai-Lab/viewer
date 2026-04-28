@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from collections import OrderedDict
 from itertools import count
 from queue import Empty, PriorityQueue
@@ -27,6 +28,15 @@ class StreamAdapter(Protocol):
         request: ViewRequest,
         stream: StreamView,
     ) -> Any: ...
+
+
+@dataclass(frozen=True)
+class StreamCacheStats:
+    loaded_chunk_count: int = 0
+    loaded_bytes: int = 0
+    pending_chunk_count: int = 0
+    working_chunk_count: int = 0
+    loaded_keys: tuple[ChunkKey, ...] = ()
 
 
 class ChunkManager:
@@ -98,7 +108,64 @@ class ChunkManager:
         with self._lock:
             return self._total_bytes
 
+    @property
+    def loaded_chunk_count(self) -> int:
+        with self._lock:
+            return len(self._loaded)
+
+    @property
+    def pending_chunk_count(self) -> int:
+        with self._lock:
+            return sum(len(keys) for keys in self._pending.values())
+
+    @property
+    def working_chunk_count(self) -> int:
+        with self._lock:
+            return sum(len(keys) for keys in self._working.values())
+
+    @property
+    def prefetch_distance(self) -> int:
+        return self._prefetch_distance
+
+    def stream_debug_stats(self) -> dict[str, StreamCacheStats]:
+        with self._lock:
+            loaded_chunk_count = {sid: 0 for sid in self.stream_ids}
+            loaded_bytes = {sid: 0 for sid in self.stream_ids}
+            loaded_keys = {sid: [] for sid in self.stream_ids}
+
+            for (stream_id, key), chunk in self._loaded.items():
+                loaded_chunk_count[stream_id] += 1
+                loaded_bytes[stream_id] += chunk.nbytes
+                loaded_keys[stream_id].append(key)
+
+            return {
+                stream_id: StreamCacheStats(
+                    loaded_chunk_count=loaded_chunk_count[stream_id],
+                    loaded_bytes=loaded_bytes[stream_id],
+                    pending_chunk_count=len(self._pending[stream_id]),
+                    working_chunk_count=len(self._working[stream_id]),
+                    loaded_keys=tuple(loaded_keys[stream_id]),
+                )
+                for stream_id in self.stream_ids
+            }
+
     # -- public API ---------------------------------------------------------
+
+    def clear(self) -> None:
+        """Best-effort flush of loaded and queued chunks.
+
+        In-flight fetches may still complete, but their results are dropped unless a
+        subsequent update marks the same key as working again.
+        """
+
+        with self._lock:
+            self._loaded.clear()
+            self._total_bytes = 0
+            for stream_id in self.stream_ids:
+                self._pending[stream_id].clear()
+                self._working[stream_id].clear()
+            self._queue = PriorityQueue()
+            self._generation += 1
 
     def update(self, request: ViewRequest) -> dict[str, StreamFrame]:
         streams = request.streams or tuple(StreamView(sid) for sid in self.stream_ids)

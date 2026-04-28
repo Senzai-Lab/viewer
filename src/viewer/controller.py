@@ -97,6 +97,8 @@ class PlaybackController:
     def pause(self) -> None:
         self.is_playing = False
 
+    def toggle(self) -> None:
+        self.is_playing = not self.is_playing
     # -- per-frame loop -----------------------------------------------------
 
     def tick(self, monotonic_now_s: float) -> int:
