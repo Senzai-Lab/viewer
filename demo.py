@@ -1,9 +1,8 @@
-import math
 import time
 from collections import deque
 
 import numpy as np
-from imgui_bundle import imgui, immapp, implot, icons_fontawesome_4
+from imgui_bundle import imgui, immapp, implot
 
 from viewer import (
     ChunkManager,
@@ -14,107 +13,21 @@ from viewer import (
     ns_to_seconds,
     seconds_to_ns,
 )
-from viewer.utils import format_bytes
+from viewer.ui_old import (
+    TRANSPORT_HEIGHT,
+    draw_cursor,
+    draw_debug_popup,
+    draw_transport,
+    handle_shortcuts,
+    sync_axis_links,
+)
+from viewer.utils import MIN_VIEW_SPAN_S, max_view_span_ns, max_view_span_s
 
 
-FA_PLAY = icons_fontawesome_4.ICON_FA_PLAY
-FA_PAUSE = icons_fontawesome_4.ICON_FA_PAUSE
-FA_BACKWARD = icons_fontawesome_4.ICON_FA_STEP_BACKWARD
-FA_FORWARD = icons_fontawesome_4.ICON_FA_STEP_FORWARD
-FA_RESET = icons_fontawesome_4.ICON_FA_UNDO
-FA_BUG = icons_fontawesome_4.ICON_FA_BUG
-
-JUMP_VIEW_FRACTION = 0.25
-MIN_VIEW_SPAN_S = 0.25
-PLOT_HEIGHT = 240
-TRANSPORT_HEIGHT = 96.0
 DEFAULT_Y_LIMITS = (-1.5, 1.5)
-CURSOR_HALF_WIDTH_PX = 6.0
-CURSOR_HEIGHT_PX = 9.0
 FPS_HISTORY_LEN = 120
-
-
-# ---------------------------------------------------------------------------
-# Cache budget estimation
-# ---------------------------------------------------------------------------
-
-def _chunk_nbytes(adapter: DenseSignalAdapter) -> int:
-    per_sample = adapter.channel_count * adapter.data.dtype.itemsize + np.dtype(np.int64).itemsize
-    chunk_samples = min(adapter.chunk_samples, adapter.sample_count)
-    return int(chunk_samples * per_sample)
-
-
-def _chunk_span_ns(adapter: DenseSignalAdapter) -> int:
-    chunk_samples = min(adapter.chunk_samples, adapter.sample_count)
-    return max(1, int(round(chunk_samples * adapter.sample_period_ns)))
-
-
-def _required_bytes(adapters, span_ns: int, prefetch_distance: int) -> int:
-    total = 0
-    for adapter in adapters:
-        chunk_span = _chunk_span_ns(adapter)
-        visible = max(1, math.ceil(span_ns / chunk_span) + 1)
-        total += (visible + max(0, prefetch_distance)) * _chunk_nbytes(adapter)
-    return total
-
-
-def _max_view_span_ns(adapters, budget: int | None, prefetch_distance: int) -> int:
-    full = max(a.time_range.stop_ns for a in adapters) - min(
-        a.time_range.start_ns for a in adapters
-    )
-    if budget is None or _required_bytes(adapters, full, prefetch_distance) <= budget:
-        return full
-    lo, hi = 1, full
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if _required_bytes(adapters, mid, prefetch_distance) <= budget:
-            lo = mid
-        else:
-            hi = mid - 1
-    return lo
-
-
-# ---------------------------------------------------------------------------
-# Theme
-# ---------------------------------------------------------------------------
-
-def apply_theme_once(state: "AppState") -> None:
-    if state.theme_applied:
-        return
-
-    style = imgui.get_style()
-    imgui.style_colors_dark()
-
-    style.window_rounding = 6.0
-    style.frame_rounding = 4.0
-    style.grab_rounding = 4.0
-    style.popup_rounding = 6.0
-    style.scrollbar_rounding = 6.0
-    style.tab_rounding = 4.0
-    style.window_padding = imgui.ImVec2(10, 10)
-    style.frame_padding = imgui.ImVec2(8, 5)
-    style.item_spacing = imgui.ImVec2(8, 6)
-
-    c = imgui.Col_
-    set_color = style.set_color_
-    set_color(c.window_bg.value, imgui.ImVec4(0.09, 0.09, 0.11, 1.00))
-    set_color(c.child_bg.value, imgui.ImVec4(0.09, 0.09, 0.11, 0.00))
-    set_color(c.popup_bg.value, imgui.ImVec4(0.11, 0.11, 0.13, 0.98))
-    set_color(c.frame_bg.value, imgui.ImVec4(0.16, 0.16, 0.19, 1.00))
-    set_color(c.frame_bg_hovered.value, imgui.ImVec4(0.22, 0.22, 0.26, 1.00))
-    set_color(c.frame_bg_active.value, imgui.ImVec4(0.28, 0.28, 0.33, 1.00))
-    set_color(c.button.value, imgui.ImVec4(0.20, 0.20, 0.24, 1.00))
-    set_color(c.button_hovered.value, imgui.ImVec4(0.30, 0.42, 0.62, 1.00))
-    set_color(c.button_active.value, imgui.ImVec4(0.24, 0.36, 0.56, 1.00))
-    set_color(c.header.value, imgui.ImVec4(0.20, 0.20, 0.24, 1.00))
-    set_color(c.header_hovered.value, imgui.ImVec4(0.30, 0.42, 0.62, 1.00))
-    set_color(c.slider_grab.value, imgui.ImVec4(0.45, 0.65, 0.95, 1.00))
-    set_color(c.slider_grab_active.value, imgui.ImVec4(0.55, 0.75, 1.00, 1.00))
-    set_color(c.check_mark.value, imgui.ImVec4(0.55, 0.75, 1.00, 1.00))
-    set_color(c.separator.value, imgui.ImVec4(0.20, 0.20, 0.24, 1.00))
-    set_color(c.border.value, imgui.ImVec4(0.20, 0.20, 0.24, 1.00))
-
-    state.theme_applied = True
+HOVER_MARKER_RADIUS_PX = 4.0
+HOVER_Y_TOLERANCE_FRAC = 0.04
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +60,7 @@ class AppState:
 
         memory_budget = 3 * 1024 * 1024
         prefetch_distance = 1
-        self.max_view_span_ns = _max_view_span_ns(self.adapters, memory_budget, prefetch_distance)
+        self.max_view_span_ns = max_view_span_ns(self.adapters, memory_budget, prefetch_distance)
         self.initial_view_span_ns = min(seconds_to_ns(8.0), self.max_view_span_ns)
         self.initial_cursor_ns = seconds_to_ns(5.0)
         self.reset_cursor_ns = min(a.time_range.start_ns for a in self.adapters)
@@ -166,9 +79,6 @@ class AppState:
             memory_budget_bytes=memory_budget,
         )
 
-        self.show_cursor = True
-        self.show_debug = False
-        self.theme_applied = False
         self.y_limits = {sv.stream_id: DEFAULT_Y_LIMITS for sv in self.stream_views}
         self.default_y_limits = dict(self.y_limits)
 
@@ -180,117 +90,102 @@ class AppState:
         self.session.close()
 
 
-# ---------------------------------------------------------------------------
-# View helpers
-# ---------------------------------------------------------------------------
-
-def jump_step_ns(controller: PlaybackController) -> int:
-    return max(1, int(round(controller.view_span_ns * JUMP_VIEW_FRACTION)))
-
-
-def max_view_span_s(state: AppState) -> float:
-    return ns_to_seconds(max(1, state.max_view_span_ns))
-
-
-def min_view_span_s(state: AppState) -> float:
-    return min(MIN_VIEW_SPAN_S, max_view_span_s(state))
+def _nearest_sample_index(xs: np.ndarray, x_value: float) -> int:
+    index = int(np.searchsorted(xs, x_value))
+    if index <= 0:
+        return 0
+    if index >= xs.size:
+        return int(xs.size - 1)
+    before = index - 1
+    if abs(float(xs[index]) - x_value) < abs(float(xs[before]) - x_value):
+        return index
+    return before
 
 
-def estimated_working_bytes(state: AppState) -> int:
-    return _required_bytes(
-        state.adapters,
-        state.controller.view_span_ns,
-        state.session.prefetch_distance,
+def _hovered_line_info(
+    xs: np.ndarray,
+    values: np.ndarray,
+    channel_indices: np.ndarray,
+    y_limits: tuple[float, float],
+) -> dict | None:
+    if xs.size == 0 or values.size == 0 or not implot.is_plot_hovered():
+        return None
+
+    mouse = implot.get_plot_mouse_pos()
+    sample_index = _nearest_sample_index(xs, float(mouse.x))
+    span = max(1e-6, y_limits[1] - y_limits[0])
+    y_tolerance = span * HOVER_Y_TOLERANCE_FRAC
+
+    hovered = None
+    best_distance = None
+    for row, ys in enumerate(values):
+        value = float(ys[sample_index])
+        distance = abs(value - float(mouse.y))
+        if distance > y_tolerance:
+            continue
+        if best_distance is None or distance < best_distance:
+            best_distance = distance
+            hovered = {
+                "row": row,
+                "sample_index": sample_index,
+                "channel": int(channel_indices[row]),
+                "x": float(xs[sample_index]),
+                "y": value,
+            }
+    return hovered
+
+
+def _boost_color(color: imgui.ImVec4, amount: float = 0.18) -> imgui.ImVec4:
+    return imgui.ImVec4(
+        min(1.0, color.x + amount),
+        min(1.0, color.y + amount),
+        min(1.0, color.z + amount),
+        color.w,
     )
 
 
-def reset_state(state: AppState) -> None:
-    state.session.clear()
-    state.controller.pause()
-    state.controller.set_view_span(state.initial_view_span_ns)
-    state.controller.jump_to(state.reset_cursor_ns)
-    state.show_cursor = True
-    state.y_limits = dict(state.default_y_limits)
-    state.stream_cache_stats = state.session.stream_debug_stats()
-
-
-def set_visible_window(state: AppState, start_s: float, stop_s: float) -> None:
-    controller = state.controller
-    t_min, t_max = controller.t_min_s, controller.t_max_s
-    max_span = min(t_max - t_min, max_view_span_s(state))
-    min_span = min(MIN_VIEW_SPAN_S, max_span)
-
-    if stop_s < start_s:
-        start_s, stop_s = stop_s, start_s
-    span = min(max_span, max(min_span, stop_s - start_s))
-    if span >= max_span:
-        start_s, stop_s = t_min, t_max
-    else:
-        if start_s < t_min:
-            start_s, stop_s = t_min, t_min + span
-        if stop_s > t_max:
-            stop_s, start_s = t_max, t_max - span
-
-    controller.set_view_span(seconds_to_ns(stop_s - start_s))
-    controller.jump_to(seconds_to_ns(0.5 * (start_s + stop_s)))
-
-
-def sync_axis_links(state: AppState, x_min_box, x_max_box) -> None:
-    visible = state.controller.visible_range
-    cur_start = ns_to_seconds(visible.start_ns)
-    cur_stop = ns_to_seconds(visible.stop_ns)
-    new_start = float(x_min_box.value)
-    new_stop = float(x_max_box.value)
-    if abs(new_start - cur_start) <= 1e-6 and abs(new_stop - cur_stop) <= 1e-6:
-        return
-    set_visible_window(state, new_start, new_stop)
-
-
-def handle_shortcuts(state: AppState) -> None:
-    if not imgui.is_window_focused(imgui.FocusedFlags_.root_and_child_windows):
-        return
-    if imgui.is_any_item_active():
-        return
-
-    controller = state.controller
-    if imgui.is_key_pressed(imgui.Key.space, repeat=False):
-        controller.toggle()
-    if imgui.is_key_pressed(imgui.Key.left_arrow):
-        controller.jump_by(-jump_step_ns(controller))
-    if imgui.is_key_pressed(imgui.Key.right_arrow):
-        controller.jump_by(jump_step_ns(controller))
-    if imgui.is_key_pressed(imgui.Key.r, repeat=False):
-        reset_state(state)
-    if imgui.is_key_pressed(imgui.Key.d, repeat=False):
-        state.show_debug = not state.show_debug
-
-
-# ---------------------------------------------------------------------------
-# Plot rendering
-# ---------------------------------------------------------------------------
-
-def draw_cursor(cursor_s: float) -> None:
+def _draw_hover_guide(hovered: dict, base_color: imgui.ImVec4) -> None:
+    """Vertical guide + dot at the hovered sample. Cheap: a few draw_list ops."""
     limits = implot.get_plot_limits()
-    if not limits.x.contains(cursor_s):
-        return
-
-    top = implot.plot_to_pixels(implot.Point(cursor_s, limits.y.max))
-    bottom = implot.plot_to_pixels(implot.Point(cursor_s, limits.y.min))
+    color = imgui.color_convert_float4_to_u32(_boost_color(base_color))
+    guide_color = imgui.color_convert_float4_to_u32(
+        imgui.ImVec4(base_color.x, base_color.y, base_color.z, 0.35)
+    )
     draw_list = implot.get_plot_draw_list()
-    color = imgui.IM_COL32(220, 230, 255, 230)
-
+    top = implot.plot_to_pixels(implot.Point(hovered["x"], limits.y.max))
+    bottom = implot.plot_to_pixels(implot.Point(hovered["x"], limits.y.min))
     draw_list.add_line(
-        imgui.ImVec2(top.x, top.y + CURSOR_HEIGHT_PX),
+        imgui.ImVec2(top.x, top.y),
         imgui.ImVec2(bottom.x, bottom.y),
-        color,
+        guide_color,
         1.0,
     )
-    draw_list.add_triangle_filled(
-        imgui.ImVec2(top.x - CURSOR_HALF_WIDTH_PX, top.y),
-        imgui.ImVec2(top.x + CURSOR_HALF_WIDTH_PX, top.y),
-        imgui.ImVec2(top.x, top.y + CURSOR_HEIGHT_PX),
+    point = implot.plot_to_pixels(implot.Point(hovered["x"], hovered["y"]))
+    draw_list.add_circle_filled(
+        imgui.ImVec2(point.x, point.y),
+        HOVER_MARKER_RADIUS_PX,
         color,
     )
+
+
+def _draw_hover_details(stream_id: str, hovered: dict, base_color: imgui.ImVec4) -> None:
+    implot.annotation(
+        hovered["x"],
+        hovered["y"],
+        _boost_color(base_color),
+        imgui.ImVec2(10, -10),
+        True,
+        f"ch{hovered['channel']}  {hovered['y']:.3f}",
+    )
+
+    if imgui.begin_tooltip():
+        imgui.text_disabled(stream_id)
+        imgui.separator()
+        imgui.text(f"channel: {hovered['channel']}")
+        imgui.text(f"time:    {hovered['x']:.4f} s")
+        imgui.text(f"value:   {hovered['y']:.4f}")
+        imgui.text(f"sample:  {hovered['sample_index']}")
+        imgui.end_tooltip()
 
 
 def draw_stream_plot(
@@ -304,9 +199,9 @@ def draw_stream_plot(
     y_min, y_max = state.y_limits[stream_id]
     y_min_box = implot.BoxedValue(y_min)
     y_max_box = implot.BoxedValue(y_max)
-    plot_flags = implot.Flags_.no_menus | implot.Flags_.no_mouse_text
+    max_span_s = max_view_span_s(state.max_view_span_ns)
 
-    if implot.begin_plot(f"{stream_id}##plot", imgui.ImVec2(-1, PLOT_HEIGHT), plot_flags):
+    if implot.begin_plot(f"{stream_id}##plot", imgui.ImVec2(-1, -1)):
         implot.setup_axes("time (s)", "value")
         implot.setup_axis_links(implot.ImAxis_.x1, x_min_box, x_max_box)
         implot.setup_axis_limits_constraints(
@@ -316,162 +211,39 @@ def draw_stream_plot(
         )
         implot.setup_axis_zoom_constraints(
             implot.ImAxis_.x1,
-            min_view_span_s(state),
-            max_view_span_s(state),
+            min(MIN_VIEW_SPAN_S, max_span_s),
+            max_span_s,
         )
         implot.setup_axis_links(implot.ImAxis_.y1, y_min_box, y_max_box)
 
         if payload is not None and payload["time_ns"].size:
-            xs = np.ascontiguousarray(payload["time_ns"], dtype=np.float64) / 1_000_000_000.0
+            xs = payload["time_ns"].astype(np.float64) / 1_000_000_000.0
             values = np.ascontiguousarray(payload["values"], dtype=np.float64)
             channel_indices = np.ascontiguousarray(payload["channel_indices"], dtype=np.int64)
-            for i, channel_values in enumerate(values):
-                ys = np.ascontiguousarray(channel_values, dtype=np.float64)
-                implot.plot_line(f"ch{int(channel_indices[i])}", xs, ys)
+            hovered = _hovered_line_info(
+                xs,
+                values,
+                channel_indices,
+                (float(y_min_box.value), float(y_max_box.value)),
+            )
+            hovered_color = None
+            for i in range(values.shape[0]):
+                ys = values[i]
+                label = f"ch{int(channel_indices[i])}"
+                implot.plot_line(label, xs, ys)
+                if hovered is not None and hovered["row"] == i:
+                    hovered_color = implot.get_last_item_color()
+
+            if hovered is not None and hovered_color is not None:
+                _draw_hover_guide(hovered, hovered_color)
+                _draw_hover_details(stream_id, hovered, hovered_color)
         else:
             implot.plot_text("loading…", ns_to_seconds(request.cursor_ns), 0.0)
 
-        if state.show_cursor:
-            draw_cursor(state.controller.cursor_s)
+        draw_cursor(state.controller.cursor_s)
 
-        state.y_limits[stream_id] = (float(y_min_box.value), float(y_max_box.value))
         implot.end_plot()
-
-
-# ---------------------------------------------------------------------------
-# Transport
-# ---------------------------------------------------------------------------
-
-def draw_transport(state: AppState) -> None:
-    controller = state.controller
-    step = jump_step_ns(controller)
-
-    if imgui.button(FA_BACKWARD):
-        controller.jump_by(-step)
-    imgui.same_line()
-
-    if imgui.button(FA_PAUSE if controller.is_playing else FA_PLAY):
-        controller.toggle()
-    imgui.same_line()
-
-    if imgui.button(FA_FORWARD):
-        controller.jump_by(step)
-    imgui.same_line()
-
-    imgui.dummy(imgui.ImVec2(8, 0))
-    imgui.same_line()
-
-    if imgui.button(f"{FA_RESET}"):
-        reset_state(state)
-    imgui.same_line()
-
-    _, state.show_debug = imgui.checkbox(f"{FA_BUG}", state.show_debug)
-    imgui.same_line()
-
-    _, state.show_cursor = imgui.checkbox("Cursor", state.show_cursor)
-    imgui.same_line()
-
-    imgui.set_next_item_width(110)
-    changed, new_speed = imgui.input_float("speed", controller.playback_speed, 0.1, 1.0, "%.2fx")
-    if changed:
-        controller.playback_speed = float(new_speed)
-
-    imgui.set_next_item_width(-1)
-    changed, new_t = imgui.slider_float(
-        "##time",
-        controller.cursor_s,
-        controller.t_min_s,
-        controller.t_max_s,
-        f"%.3f s  /  {controller.t_max_s:.2f} s",
-    )
-    if changed:
-        controller.jump_to(seconds_to_ns(new_t))
-
-
-# ---------------------------------------------------------------------------
-# Debug window (cache-focused, toggleable, movable, resizable)
-# ---------------------------------------------------------------------------
-
-def _kv(label: str, value: str) -> None:
-    imgui.text_disabled(label)
-    imgui.same_line(140)
-    imgui.text(value)
-
-
-def _progress(fraction: float, overlay: str) -> None:
-    imgui.progress_bar(max(0.0, min(1.0, fraction)), imgui.ImVec2(-1, 0), overlay)
-
-
-def draw_debug_window(state: AppState) -> None:
-    if not state.show_debug:
-        return
-
-    imgui.set_next_window_size(imgui.ImVec2(420, 540), imgui.Cond_.first_use_ever)
-    imgui.set_next_window_pos(imgui.ImVec2(60, 60), imgui.Cond_.first_use_ever)
-    imgui.set_next_window_size_constraints(imgui.ImVec2(340, 240), imgui.ImVec2(800, 1200))
-
-    expanded, state.show_debug = imgui.begin(f"{FA_BUG}  Cache Debug", state.show_debug)
-    if not expanded:
-        imgui.end()
-        return
-
-    session = state.session
-    avg_fps = (sum(state.fps_history) / len(state.fps_history)) if state.fps_history else 0.0
-    frame_ms = (1000.0 / avg_fps) if avg_fps > 0 else 0.0
-
-    imgui.separator_text("Performance")
-    _kv("FPS", f"{avg_fps:6.1f}")
-    _kv("Frame time", f"{frame_ms:6.2f} ms")
-
-    imgui.separator_text("Memory")
-    budget = session.memory_budget_bytes
-    loaded = session.loaded_bytes
-    working = estimated_working_bytes(state)
-    _progress(
-        (loaded / budget) if budget else 0.0,
-        f"loaded   {format_bytes(loaded)} / {format_bytes(budget)}",
-    )
-    _progress(
-        (working / budget) if budget else 0.0,
-        f"working ≈ {format_bytes(working)}",
-    )
-
-    imgui.separator_text("Chunks")
-    _kv("Loaded",   str(session.loaded_chunk_count))
-    _kv("Pending",  str(session.pending_chunk_count))
-    _kv("Working",  str(session.working_chunk_count))
-    _kv("Prefetch", f"±{session.prefetch_distance}")
-
-    imgui.separator_text("View")
-    _kv("Span",   f"{state.controller.view_span_s:.3f} s")
-    _kv("Max",    f"{max_view_span_s(state):.3f} s")
-    _kv("Cursor", f"{state.controller.cursor_s:.3f} s")
-    _kv("State",  "playing" if state.controller.is_playing else "paused")
-
-    imgui.separator_text("Per-stream")
-    for adapter in state.adapters:
-        stats = state.stream_cache_stats[adapter.stream_id]
-        frame = state.frames.get(adapter.stream_id)
-        coverage = frame.coverage if frame is not None else 0.0
-
-        if not imgui.collapsing_header(
-            f"{adapter.stream_id}##hdr", imgui.TreeNodeFlags_.default_open.value
-        ):
-            continue
-
-        imgui.indent()
-        _progress(coverage, f"coverage {coverage * 100:5.1f}%")
-        _kv("Loaded",  f"{stats.loaded_chunk_count}  ({format_bytes(stats.loaded_bytes)})")
-        _kv("Pending", str(stats.pending_chunk_count))
-        _kv("Working", str(stats.working_chunk_count))
-        _kv("Chunk",   f"{format_bytes(_chunk_nbytes(adapter))} / "
-                       f"{ns_to_seconds(_chunk_span_ns(adapter)):.3f} s")
-        if stats.loaded_keys:
-            imgui.text_disabled("Loaded keys:")
-            imgui.text_wrapped(", ".join(stats.loaded_keys))
-        imgui.unindent()
-
-    imgui.end()
+        state.y_limits[stream_id] = (float(y_min_box.value), float(y_max_box.value))
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +254,7 @@ def build_app(state: AppState):
     def app() -> None:
         controller = state.controller
         controller.tick(time.monotonic())
-        apply_theme_once(state)
+        imgui.style_colors_classic()
 
         io = imgui.get_io()
         state.fps_history.append(io.framerate)
@@ -499,12 +271,12 @@ def build_app(state: AppState):
             imgui.Cond_.first_use_ever,
         )
         main_visible, _ = imgui.begin(
-            "Signal Viewer",
+            "##",
             flags=imgui.WindowFlags_.no_collapse,
         )
         if not main_visible:
+            draw_debug_popup(state)
             imgui.end()
-            draw_debug_window(state)
             return
 
         handle_shortcuts(state)
@@ -543,9 +315,8 @@ def build_app(state: AppState):
 
         imgui.separator()
         draw_transport(state)
+        draw_debug_popup(state)
         imgui.end()
-
-        draw_debug_window(state)
 
     return app
 

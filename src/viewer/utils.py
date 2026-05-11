@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 def format_bytes(nbytes: int | None) -> str:
     if nbytes is None:
         return "unbounded"
