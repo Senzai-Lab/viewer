@@ -13,18 +13,43 @@ class ChunkCache:
         self.cache: OrderedDict[tuple, dict] = OrderedDict()
         self.pending: dict[tuple, Future] = {}
         self.streams: dict[str, Stream] = {}
+
+        self.stream_counts: dict[str, int] = {}
+        self.used_bytes = 0
         self.chunks_per_stream = chunks_per_stream
-        self.budget = 0
         self.max_budget = max_budget
 
     def add(self, stream: Stream):
         self.streams[stream.name] = stream
-        self.budget = min(self.budget + stream.chunk_nbytes * self.chunks_per_stream,
-                          self.max_budget)
     
     @property
     def used(self) -> int:
-        return sum(self.streams[k[0]].chunk_nbytes for k in self.cache)
+        return self.used_bytes
+    
+    def _evict(self, key):
+        payload = self.cache.pop(key)
+        self.used_bytes -= payload['n_bytes']
+        self.stream_counts[key[0]] -= 1
+    
+    def _admit(self, key: tuple, payload: dict):
+        stream_name = key[0]
+        size = payload['n_bytes']
+
+        # per-stream cap
+        while self.stream_counts.get(stream_name, 0) >= self.chunks_per_stream:
+            for k in self.cache: # oldest-first iteration
+                if k[0] == stream_name:
+                    self._evict(k)
+                    break
+        
+        # global hard cap
+        while self.used_bytes + size > self.max_budget and self.cache:
+            self._evict(next(iter(self.cache)))
+
+        self.cache[key] = payload
+        self.cache.move_to_end(key)
+        self.used_bytes += size
+        self.stream_counts[stream_name] = self.stream_counts.get(stream_name, 0) + 1
 
     def get_range(self, stream_name: str, t0: float, t1: float) -> list[dict]:
         """Return cached chunks covering the given time interval."""
@@ -65,16 +90,12 @@ class ChunkCache:
             f.cancel()
         self.pending.clear()
         self.cache.clear()
+        self.stream_counts.clear()
+        self.used_bytes = 0
 
     def close(self):
         self.pool.shutdown(wait=False, cancel_futures=True)
         self.pending.clear()
         self.cache.clear()
-
-    def _admit(self, key: tuple, payload: dict):
-        # key = (name, chunk_idx)
-        size = self.streams[key[0]].chunk_nbytes
-        while self.used + size > self.budget and self.cache:
-            self.cache.popitem(last=False)
-        self.cache[key] = payload
-        self.cache.move_to_end(key)
+        self.stream_counts.clear()
+        self.used_bytes = 0

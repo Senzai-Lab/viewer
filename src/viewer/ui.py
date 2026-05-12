@@ -13,7 +13,7 @@ FA_BUG = icons_fontawesome_4.ICON_FA_BUG
 
 
 @dataclass
-class EphysSpec:
+class TimeSeriesSpec:
     line_weight: float = 1.0
     ch_offset: float = 1.0
     gain: float = 1.0
@@ -22,7 +22,7 @@ class EphysSpec:
     def to_implot_spec(self) -> implot.Spec:
         return implot.Spec(line_weight=self.line_weight)
 
-def draw_ephys_spec(name: str, spec: EphysSpec):
+def draw_timeseries_spec(name: str, spec: TimeSeriesSpec):
     _, spec.visible = imgui.checkbox(f"Visible##{name}", spec.visible)
 
     imgui.set_next_item_width(-1)
