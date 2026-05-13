@@ -11,7 +11,7 @@ ChunkKey = tuple[str, int]
 
 class ChunkCache:
     """
-    For each stream at given time t, request the current chunk and its
+    For each stream at given time t, prefetch the current chunk and its
     immediate neighbor chunks.
     """
     def __init__(self, max_workers: int = 4, max_budget: int = 2 * 1024**3):
@@ -46,7 +46,7 @@ class ChunkCache:
         stream_name, chunk_idx = key
         return chunk_idx in self.desired.get(stream_name, set())
 
-    def request(self, stream_name: str, t: float):
+    def prefetch(self, stream_name: str, t: float):
         indices = self.chunk_indices(stream_name, t)
         wanted = set(indices)
         center = self.streams[stream_name].chunk_at(t)

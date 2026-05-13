@@ -23,14 +23,16 @@ class AppState:
         self.renderers = dict(DEFAULT_RENDERERS)
         if renderers:
             self.renderers.update(renderers)
-        self.specs = {}
+        self.settings = {}
+        self.visible = {}
 
         for stream in streams:
             if stream.kind not in self.renderers:
                 raise ValueError(f"No renderer registered for stream kind: {stream.kind}")
 
             self.cache.add(stream)
-            self.specs[stream.name] = self.renderers[stream.kind].make_spec(stream)
+            self.visible[stream.name] = True
+            self.settings[stream.name] = self.renderers[stream.kind].make_settings(stream)
 
         t_min = min(s.t_min for s in streams)
         t_max = max(s.t_max for s in streams)
@@ -58,7 +60,7 @@ def gui_plot(state: AppState):
     visible_streams = [
         (name, stream)
         for name, stream in cache.streams.items()
-        if state.specs[name].visible
+        if state.visible[name]
     ]
     if not visible_streams:
         return
@@ -75,20 +77,21 @@ def gui_plot(state: AppState):
         for name, stream in visible_streams:
             chunks = cache.get_chunks(name, t)
             renderer = state.renderers[stream.kind]
-            renderer.draw_plot(stream, chunks, state.specs[name], t, view_t0, view_t1)
+            renderer.draw_plot(stream, chunks, state.settings[name], t, view_t0, view_t1)
 
         implot.end_subplots()
         ctrl.update_view(view_t0.value, view_t1.value)
 
     for name, stream in visible_streams:
-        cache.request(name, ctrl.t_cursor)
+        cache.prefetch(name, ctrl.t_cursor)
 
 
 def gui_settings(state: AppState):
     for name, stream in state.cache.streams.items():
         if imgui.collapsing_header(f"{name}##settings", imgui.TreeNodeFlags_.default_open):
+            _, state.visible[name] = imgui.checkbox(f"Visible##{name}", state.visible[name])
             renderer = state.renderers[stream.kind]
-            renderer.draw_settings(name, state.specs[name])
+            renderer.draw_settings(name, stream, state.settings[name])
 
 
 def run_viewer(

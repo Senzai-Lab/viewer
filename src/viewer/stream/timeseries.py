@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 import numpy as np
-
-if TYPE_CHECKING:
-    from zarr import Array
 
 
 class TimeSeries:
@@ -15,36 +12,35 @@ class TimeSeries:
     def __init__(
             self,
             name: str,
-            values: Array,
-            ts: Array,
+            values: Any,
+            ts: Any,
             fs: float,
             *,
-            chunk_samples: int | None = None,
+            chunk_samples: int,
     ):
         self.name = name
-        self.t_min = float(ts[0])
-        self.t_max = float(ts[-1])
         self.values = values
         self.ts = ts
 
-        self.fs = fs
+        self.fs = float(fs)
+        self.t_min = float(ts[0])
+        self.t_max = float(ts[-1])
         self.n_samples = values.shape[0]
         self.n_channels = values.shape[1] if values.ndim > 1 else 1
-        self.chunk_samples = chunk_samples if chunk_samples is not None else values.chunks[0]
+        self.chunk_samples = int(chunk_samples)
+        if self.chunk_samples <= 0:
+            raise ValueError("chunk_samples must be positive")
         self.n_chunks = -(-self.n_samples // self.chunk_samples)
 
         self.chunk_nbytes = self.chunk_samples * (
             self.n_channels * values.dtype.itemsize + ts.dtype.itemsize
         )
 
-        chunk_start_idx = np.arange(0, self.n_samples, self.chunk_samples)
-        self.chunk_times = np.asarray(ts[chunk_start_idx])
-
     @property
     def duration(self) -> float:
         return self.t_max - self.t_min
 
-    def view(self, chunks, t0: float, t1: float, width_px: float):
+    def iter_visible(self, chunks, t0: float, t1: float, width_px: float):
         stride = max(1, int(self.fs * (t1 - t0) / max(width_px, 1)))
 
         for chunk in chunks:
@@ -71,8 +67,9 @@ class TimeSeries:
             )
 
     def chunk_at(self, t: float) -> int:
-        idx = np.searchsorted(self.chunk_times, t, side="right")
-        return max(int(idx) - 1, 0)
+        sample_idx = int((t - self.t_min) * self.fs)
+        chunk_idx = sample_idx // self.chunk_samples
+        return max(0, min(chunk_idx, self.n_chunks - 1))
 
     def load_chunk(self, chunk_idx: int) -> dict:
         start = chunk_idx * self.chunk_samples

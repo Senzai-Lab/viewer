@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 import numpy as np
-
-if TYPE_CHECKING:
-    from zarr import Array
 
 
 class Units:
@@ -15,44 +12,54 @@ class Units:
     def __init__(
         self,
         name: str,
-        values: Array,
-        ts: Array,
-        metadata: dict,
+        ts: Any,
+        values: Any,
+        metadata: dict | None = None,
         *,
         chunk_duration: float = 10.0,
+        unit_ids=None,
     ):
         self.name = name
-        self.metadata = metadata
+        raw_metadata = dict(metadata or {})
 
         self.values = values
-        self.ts = ts
+        # Load spike timestamps for fast searchsorted.
+        self.ts = np.asarray(ts)
 
-        self._n_spikes = int(ts.shape[0])
-        self.t_min = float(ts[0])
-        self.t_max = float(ts[-1])
+        self._n_spikes = len(self.ts)
+        self.t_min = float(self.ts[0])
+        self.t_max = float(self.ts[-1])
         self.chunk_duration = chunk_duration
 
         self.n_chunks = max(1, int(np.ceil((self.t_max - self.t_min) / self.chunk_duration)))
         spikes_per_chunk = int(np.ceil(self._n_spikes / self.n_chunks))
         self.chunk_nbytes = spikes_per_chunk * (ts.dtype.itemsize + values.dtype.itemsize)
-        self.unit_ids = list(metadata["rate"].keys())
+
+        ids = unit_ids
+        if ids is None:
+            ids = raw_metadata.pop("unit_ids", None)
+        if ids is None:
+            ids = raw_metadata["rate"].keys() if "rate" in raw_metadata else np.unique(values[:])
+
+        self.unit_ids = [int(uid) for uid in ids]
         self.n_units = len(self.unit_ids)
+        self.metadata = {
+            key: np.array([values[str(uid)] for uid in self.unit_ids], dtype=float)
+            for key, values in raw_metadata.items()
+        }
+        self.metadata_keys = list(self.metadata)
 
     @property
     def duration(self) -> float:
         return self.t_max - self.t_min
 
-    def view(self, chunks, t0: float, t1: float, width_px: float):
+    def iter_visible(self, chunks, t0: float, t1: float, width_px: float):
         n_bins = max(1, int(width_px))
         bin_width = (t1 - t0) / n_bins
-        if bin_width <= 0:
-            return
 
         for chunk in chunks:
             times = chunk["ts"]
             unit_ids = chunk["data"]
-            if times.size == 0:
-                continue
 
             i0 = int(np.searchsorted(times, t0, side="left"))
             i1 = int(np.searchsorted(times, t1, side="right"))
@@ -62,15 +69,17 @@ class Units:
             visible_t = times[i0:i1]
             visible_u = unit_ids[i0:i1]
 
-            bins = ((visible_t - t0) / bin_width).astype(np.int32)
+            bins = ((visible_t - t0) / bin_width).astype(int)
             np.clip(bins, 0, n_bins - 1, out=bins)
 
-            pairs = np.column_stack((visible_u, bins))
-            pairs = np.unique(pairs, axis=0)
+            # Use bins only to reduce overdraw; draw selected spikes at their
+            # original timestamps so playback does not quantize them to a moving grid.
+            codes = visible_u * n_bins + bins
+            _, keep = np.unique(codes, return_index=True)
 
             yield (
-                t0 + (pairs[:, 1] + 0.5) * bin_width,
-                pairs[:, 0],
+                visible_t[keep],
+                visible_u[keep],
             )
 
     def chunk_at(self, t: float) -> int:
@@ -84,8 +93,8 @@ class Units:
         i0 = int(np.searchsorted(self.ts, t0, side="left"))
         i1 = int(np.searchsorted(self.ts, t1, side="left"))
 
-        times = np.asarray(self.ts[i0:i1])
-        units = np.asarray(self.values[i0:i1])
+        times = self.ts[i0:i1]
+        units = np.asarray(self.values[i0:i1], dtype=int)
 
         return {
             "t_start": t0,

@@ -7,149 +7,178 @@ from imgui_bundle import imgui, implot
 from viewer.stream import Units
 from viewer.ui import draw_cursor
 
+INDEX_LABEL = "(index)"
+DEFAULT_CMAP = "cmocean:phase"
 
-class UnitsSpec:
-    def __init__(self, stream: Units):
-        self.visible = True
-        self.tick_height = 5.0
-        self.thickness = 1.0
-        self.unit_offset = 1.0
-        self.cmap_name = "cmocean:phase"
-        self.color_key = "rate"
-        self.sort_key = ""
-        self.unit_ids = np.asarray(stream.unit_ids, dtype=np.int64)
-        self.metadata = stream.metadata
 
-    @property
-    def n_units(self) -> int:
-        return len(self.unit_ids)
+class UnitsSettings:
+    tick_height = 5.0
+    width = 1.0
+    spacing = 1.0
+    cmap = DEFAULT_CMAP
+    sort_by = ""
+    color_by = ""
 
-    def sorted_ids(self) -> np.ndarray:
-        if self.sort_key and self.sort_key in self.metadata:
-            meta_dict = self.metadata[self.sort_key]
-            vals = np.array([float(meta_dict.get(str(uid), 0.0)) for uid in self.unit_ids])
-            return self.unit_ids[np.argsort(vals)]
-        return self.unit_ids
+    @classmethod
+    def from_stream(cls, stream: Units):
+        settings = cls()
+        if "rate" in stream.metadata_keys:
+            settings.color_by = "rate"
+        return settings
 
-    def colors(self, sorted_ids: np.ndarray) -> list:
-        if len(sorted_ids) == 0:
-            return []
+    def unit_order(self, stream: Units) -> list[int]:
+        if self.sort_by:
+            return np.argsort(stream.metadata[self.sort_by]).tolist()
+        return list(range(stream.n_units))
 
-        if self.color_key and self.color_key in self.metadata:
-            meta_dict = self.metadata[self.color_key]
-            vals = np.array([float(meta_dict.get(str(uid), 0.0)) for uid in sorted_ids])
-            vmin, vmax = vals.min(), vals.max()
-            norm = (vals - vmin) / max(vmax - vmin, 1e-9)
+    def unit_colors(self, stream: Units, order: list[int]) -> np.ndarray:
+        if self.color_by:
+            values = stream.metadata[self.color_by][order]
+            values = (values - values.min()) / max(values.max() - values.min(), 1e-9)
         else:
-            norm = np.linspace(0, 1, len(sorted_ids), dtype=np.float32)
+            values = np.linspace(0, 1, len(order), dtype=np.float32)
 
-        cm = Colormap(self.cmap_name)
-        rgba = cm(norm.astype(np.float32))
-        return [
-            imgui.color_convert_float4_to_u32(
-                imgui.ImVec4(float(r), float(g), float(b), float(a))
-            )
-            for r, g, b, a in rgba
-        ]
+        try:
+            rgba = Colormap(self.cmap)(values)
+        except Exception:
+            rgba = Colormap(DEFAULT_CMAP)(values)
 
-    def y_limits(self) -> tuple[float, float]:
-        if self.n_units == 0:
-            return -1.0, 1.0
+        rgba = np.clip(np.rint(rgba * 255), 0, 255).astype(np.uint8)
+        rgba[:, 3] = 255
+        return rgba
 
-        row_max = (self.n_units - 1) * self.unit_offset
-        pad = max(0.5 * self.unit_offset, 0.25)
+    def y_limits(self, n_units: int) -> tuple[float, float]:
+        row_max = (n_units - 1) * self.spacing
+        pad = max(0.5 * self.spacing, 0.25)
         return -pad, row_max + pad
 
 
-def make_spec(stream: Units) -> UnitsSpec:
-    return UnitsSpec(stream)
+def make_settings(stream: Units) -> UnitsSettings:
+    return UnitsSettings.from_stream(stream)
 
 
-def draw_settings(name: str, spec: UnitsSpec):
-    _, spec.visible = imgui.checkbox(f"Visible##{name}", spec.visible)
+def draw_settings(name: str, stream: Units, settings: UnitsSettings):
+    meta_keys = [INDEX_LABEL] + stream.metadata_keys
 
+    imgui.text("Sort by")
     imgui.set_next_item_width(-1)
-    _, spec.tick_height = imgui.slider_float(
-        f"##tick_{name}", spec.tick_height, 1.0, 20.0, "Tick height: %.1f px"
+    changed, new_idx = imgui.combo(
+        f"##sort_by_{name}",
+        meta_keys.index(settings.sort_by or INDEX_LABEL),
+        meta_keys,
     )
+    if changed:
+        settings.sort_by = "" if meta_keys[new_idx] == INDEX_LABEL else meta_keys[new_idx]
+
+    imgui.text("Color by")
     imgui.set_next_item_width(-1)
-    _, spec.thickness = imgui.slider_float(
-        f"##thick_{name}", spec.thickness, 0.5, 4.0, "Thickness: %.1f"
+    changed, new_idx = imgui.combo(
+        f"##color_by_{name}",
+        meta_keys.index(settings.color_by or INDEX_LABEL),
+        meta_keys,
     )
+    if changed:
+        settings.color_by = "" if meta_keys[new_idx] == INDEX_LABEL else meta_keys[new_idx]
+
+    imgui.text("Colormap")
     imgui.set_next_item_width(-1)
-    _, spec.unit_offset = imgui.slider_float(
-        f"##offset_{name}", spec.unit_offset, 0.1, 5.0, "Unit offset: %.1f"
+    changed, new_cmap = imgui.input_text(f"##cmap_{name}", settings.cmap)
+    if changed:
+        settings.cmap = new_cmap
+
+    imgui.separator()
+
+    imgui.text("Tick height")
+    imgui.set_next_item_width(-1)
+    _, settings.tick_height = imgui.slider_float(
+        f"##tick_{name}", settings.tick_height, 1.0, 20.0, "%.1f px"
+    )
+    imgui.text("Tick width")
+    imgui.set_next_item_width(-1)
+    _, settings.width = imgui.slider_float(
+        f"##width_{name}", settings.width, 0.5, 4.0, "%.1f"
+    )
+    imgui.text("Unit spacing")
+    imgui.set_next_item_width(-1)
+    _, settings.spacing = imgui.slider_float(
+        f"##spacing_{name}", settings.spacing, 0.1, 5.0, "%.1f"
     )
 
-    imgui.set_next_item_width(-1)
-    changed, new_cmap = imgui.input_text(f"##cmap_{name}", spec.cmap_name)
-    if imgui.is_item_hovered(imgui.HoveredFlags_.stationary):
-        imgui.set_tooltip("Colormap name")
-    if changed:
-        spec.cmap_name = new_cmap
 
-    meta_keys = ["(index)"] + [k for k in spec.metadata.keys()]
+def _rgba_u32(rgba: np.ndarray) -> int:
+    return imgui.color_convert_float4_to_u32(
+        imgui.ImVec4(*(float(value) / 255.0 for value in rgba))
+    )
 
-    sort_current = spec.sort_key if spec.sort_key else "(index)"
-    sort_idx = meta_keys.index(sort_current) if sort_current in meta_keys else 0
-    imgui.set_next_item_width(-1)
-    changed, new_idx = imgui.combo(f"Sort by##{name}", sort_idx, meta_keys)
-    if changed:
-        spec.sort_key = "" if meta_keys[new_idx] == "(index)" else meta_keys[new_idx]
 
-    color_current = spec.color_key if spec.color_key else "(index)"
-    color_idx = meta_keys.index(color_current) if color_current in meta_keys else 0
-    imgui.set_next_item_width(-1)
-    changed, new_idx = imgui.combo(f"Color by##{name}", color_idx, meta_keys)
-    if changed:
-        spec.color_key = "" if meta_keys[new_idx] == "(index)" else meta_keys[new_idx]
+def _draw_lines(
+    stream: Units,
+    chunks: list[dict],
+    settings: UnitsSettings,
+    row_by_uid: dict[int, int],
+    colors: np.ndarray,
+    t0: float,
+    t1: float,
+    width_px: int,
+):
+    colors_u32 = [_rgba_u32(color) for color in colors]
+    draw_list = implot.get_plot_draw_list()
+    half_height = settings.tick_height * 0.5
+
+    implot.push_plot_clip_rect()
+    try:
+        for times, unit_ids in stream.iter_visible(chunks, t0, t1, width_px):
+            for timestamp, uid in zip(times, unit_ids):
+                row_idx = row_by_uid[uid]
+                row = row_idx * settings.spacing
+                p = implot.plot_to_pixels(timestamp, row)
+                draw_list.add_line(
+                    imgui.ImVec2(p.x, p.y - half_height),
+                    imgui.ImVec2(p.x, p.y + half_height),
+                    colors_u32[row_idx],
+                    settings.width,
+                )
+    finally:
+        implot.pop_plot_clip_rect()
+
+
+def _plot_bounds(t0: float, t1: float, y_min: float, y_max: float):
+    spec = implot.Spec()
+    spec.marker = implot.Marker_.none
+    spec.line_weight = 0.0
+    xs = np.array([t0, t1])
+    ys = np.array([y_min, y_max])
+    implot.plot_scatter("##unit_bounds", xs, ys, spec=spec)
 
 
 def draw_plot(
-        stream: Units,
-        chunks: list[dict],
-        spec: UnitsSpec,
-        t: float,
-        view_t0: implot.BoxedValue | None = None,
-        view_t1: implot.BoxedValue | None = None,
+    stream: Units,
+    chunks: list[dict],
+    settings: UnitsSettings,
+    t: float,
+    view_t0: implot.BoxedValue,
+    view_t1: implot.BoxedValue,
 ):
-    sorted_ids = spec.sorted_ids()
-    uid_to_row = {int(uid): i for i, uid in enumerate(sorted_ids)}
-    colors = spec.colors(sorted_ids)
-    y_min, y_max = spec.y_limits()
+    order = settings.unit_order(stream)
+    unit_ids = [stream.unit_ids[i] for i in order]
+    row_by_uid = {uid: row for row, uid in enumerate(unit_ids)}
+    colors = settings.unit_colors(stream, order)
+    y_min, y_max = settings.y_limits(len(unit_ids))
 
     if implot.begin_plot(f"{stream.name}"):
         implot.setup_axes("Time (s)", "Unit", 0, 0)
-        implot.setup_axis_limits(implot.ImAxis_.y1, y_min, y_max, imgui.Cond_.always)
-
-        if view_t0 and view_t1:
-            implot.setup_axis_links(implot.ImAxis_.x1, view_t0, view_t1)
+        implot.setup_axis_limits(implot.ImAxis_.y1, y_min, y_max, imgui.Cond_.once)
+        implot.setup_axis_links(implot.ImAxis_.x1, view_t0, view_t1)
 
         if not chunks:
-            implot.plot_text("Loading...", t, spec.n_units / 2)
+            implot.plot_text("Loading...", t, len(unit_ids) / 2)
 
-        width_px = max(implot.get_plot_size().x, 1.0)
-        draw_list = implot.get_plot_draw_list()
-        implot.push_plot_clip_rect()
-        try:
-            for times, unit_ids in stream.view(chunks, view_t0.value, view_t1.value, width_px):
-                for timestamp, uid in zip(times, unit_ids):
-                    row_idx = uid_to_row.get(int(uid))
-                    if row_idx is None:
-                        continue
+        t0 = view_t0.value
+        t1 = view_t1.value
+        _plot_bounds(t0, t1, y_min, y_max)
 
-                    row = float(row_idx) * spec.unit_offset
-                    color = colors[row_idx]
-                    half = spec.tick_height * 0.5
-                    p = implot.plot_to_pixels(float(timestamp), row)
-                    draw_list.add_line(
-                        imgui.ImVec2(p.x, p.y - half),
-                        imgui.ImVec2(p.x, p.y + half),
-                        color,
-                        spec.thickness,
-                    )
-        finally:
-            implot.pop_plot_clip_rect()
+        width_px = max(1, int(implot.get_plot_size().x))
+        _draw_lines(stream, chunks, settings, row_by_uid, colors, t0, t1, width_px)
 
         draw_cursor(t)
         implot.end_plot()

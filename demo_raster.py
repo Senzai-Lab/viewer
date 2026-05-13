@@ -1,7 +1,6 @@
 import zarr
 
-from viewer.app import run_viewer
-from viewer.stream import Units
+from viewer import Units, run_viewer
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 import zarr
 
-from viewer.app import run_viewer
-from viewer.stream import TimeSeries
+from viewer import TimeSeries, run_viewer
 
 
 if __name__ == "__main__":
@@ -13,6 +12,7 @@ if __name__ == "__main__":
         values=ephys_grp["values"],
         ts=ephys_grp["ts"],
         fs=ephys_grp.attrs["fs"],
+        chunk_samples=ephys_grp["values"].chunks[0],
     )
 
     pupil_grp = root["behavior/pupil"]
@@ -21,6 +21,7 @@ if __name__ == "__main__":
         values=pupil_grp["values"],
         ts=pupil_grp["ts"],
         fs=pupil_grp.attrs["fs"],
+        chunk_samples=pupil_grp["values"].chunks[0],
     )
 
     run_viewer([ephys, pupil])

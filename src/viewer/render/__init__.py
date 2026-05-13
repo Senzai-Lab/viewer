@@ -5,4 +5,8 @@ DEFAULT_RENDERERS = {
     "units": units,
 }
 
-__all__ = ["DEFAULT_RENDERERS", "timeseries", "units"]
+__all__ = [
+    "DEFAULT_RENDERERS",
+    "timeseries",
+    "units",
+]
