@@ -16,6 +16,7 @@ class TimeController:
         self.view_t0 = t_min
         self.view_t1 = t_min + span
         self.span = span
+        self.forward = True
 
     def toggle(self):
         self.is_playing = not self.is_playing
@@ -43,16 +44,24 @@ class TimeController:
         return self.t_cursor
 
     def update_view(self, t0: float, t1: float):
-        new_span = (t1 - t0)
-        span_changed = abs(new_span - self.span) > 1e-6
+        old_center = (self.view_t0 + self.view_t1) * 0.5
+        old_span = self.view_t1 - self.view_t0
 
-        # Move cursor on a pure pan (no zoom component)
-        if not self.is_playing and not span_changed:
-            old_center = (self.view_t0 + self.view_t1) * 0.5
-            new_center = (t0 + t1) * 0.5
-            if abs(new_center - old_center) > 1e-6:
-                self.t_cursor = self._clamp(new_center)
+        new_center = (t0 + t1) * 0.5
+        new_span = t1 - t0
+
+        pan_delta = new_center - old_center
+        panned = abs(pan_delta) > 1e-6
+        zoomed = abs(new_span - old_span) > 1e-6
+
+        if self.is_playing:
+            self.forward = self.playback_speed >= 0
+        elif panned:
+            self.forward = pan_delta > 0
         
+        if panned and not zoomed:
+            self.t_cursor = self._clamp(new_center)
+
         self.view_t0 = t0
         self.view_t1 = t1
         self.span = new_span
@@ -68,4 +77,5 @@ class TimeController:
         self.is_playing = False
         self.span = 5.0
         self.playback_speed = 1.0
+        self.forward = True
         self.jump_to(self.t_min)

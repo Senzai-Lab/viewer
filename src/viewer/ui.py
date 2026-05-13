@@ -1,7 +1,6 @@
 from __future__ import annotations
 from imgui_bundle import imgui, implot, icons_fontawesome_4
 
-from dataclasses import dataclass
 from .utils import format_bytes
 
 FA_PLAY = icons_fontawesome_4.ICON_FA_PLAY
@@ -11,32 +10,6 @@ FA_FORWARD = icons_fontawesome_4.ICON_FA_STEP_FORWARD
 FA_RESET = icons_fontawesome_4.ICON_FA_UNDO
 FA_BUG = icons_fontawesome_4.ICON_FA_BUG
 
-
-@dataclass
-class TimeSeriesSpec:
-    line_weight: float = 1.0
-    ch_offset: float = 1.0
-    gain: float = 1.0
-    visible: bool = True
-
-    def to_implot_spec(self) -> implot.Spec:
-        return implot.Spec(line_weight=self.line_weight)
-
-def draw_timeseries_spec(name: str, spec: TimeSeriesSpec):
-    _, spec.visible = imgui.checkbox(f"Visible##{name}", spec.visible)
-
-    imgui.set_next_item_width(-1)
-    _, spec.line_weight = imgui.slider_float(
-        f"##lw_{name}", spec.line_weight, 0.5, 3.0, "Line weight: %.1f"
-    )
-    imgui.set_next_item_width(-1)
-    _, spec.gain = imgui.slider_float(
-        f"##gain_{name}", spec.gain, 0.1, 20.0, "Gain: %.1f"
-    )
-    imgui.set_next_item_width(-1)
-    _, spec.ch_offset = imgui.slider_float(
-        f"##offset_{name}", spec.ch_offset, 0.0, 100.0, "Ch offset: %.0f"
-    )
 
 def draw_cursor(
     cursor_s: float,
@@ -103,8 +76,8 @@ def gui_transport(state):
         imgui.open_popup("debug_popup")
     if imgui.begin_popup("debug_popup"):
         cache = state.cache
-        imgui.text(f"Cache: {format_bytes(cache.used)} / {format_bytes(cache.budget)}")
-        imgui.progress_bar(cache.used / max(cache.budget, 1), imgui.ImVec2(200, 0))
+        imgui.text(f"Cache: {format_bytes(cache.used_bytes)} / {format_bytes(cache.max_budget)}")
+        imgui.progress_bar(cache.used_bytes / max(cache.max_budget, 1), imgui.ImVec2(200, 0))
         imgui.separator()
         imgui.text(f"Pending: {len(cache.pending)}")
         imgui.text(f"Cached chunks: {len(cache.cache)}")
@@ -129,4 +102,3 @@ def gui_transport(state):
         ctrl.jump_by(0.25)
     if imgui.is_key_pressed(imgui.Key.r, repeat=False):
         state.reset()
-
