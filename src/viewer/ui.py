@@ -11,6 +11,36 @@ FA_RESET = icons_fontawesome_4.ICON_FA_UNDO
 FA_BUG = icons_fontawesome_4.ICON_FA_BUG
 
 
+def fmt_indices(indices: list[int]) -> str:
+    if not indices:
+        return "-"
+    return ", ".join(str(i) for i in indices)
+
+
+def setup_style():
+    imgui.style_colors_dark()
+
+    style = imgui.get_style()
+    style.window_rounding = 4.0
+    style.child_rounding = 4.0
+    style.frame_rounding = 3.0
+    style.popup_rounding = 4.0
+    style.grab_rounding = 3.0
+    style.window_padding = imgui.ImVec2(10, 8)
+    style.frame_padding = imgui.ImVec2(7, 4)
+    style.item_spacing = imgui.ImVec2(8, 6)
+    style.scrollbar_size = 12.0
+
+    style.set_color_(imgui.Col_.window_bg, imgui.ImVec4(0.075, 0.080, 0.090, 1.0))
+    style.set_color_(imgui.Col_.child_bg, imgui.ImVec4(0.060, 0.064, 0.072, 1.0))
+    style.set_color_(imgui.Col_.frame_bg, imgui.ImVec4(0.120, 0.130, 0.145, 1.0))
+    style.set_color_(imgui.Col_.frame_bg_hovered, imgui.ImVec4(0.170, 0.185, 0.205, 1.0))
+    style.set_color_(imgui.Col_.button, imgui.ImVec4(0.145, 0.160, 0.180, 1.0))
+    style.set_color_(imgui.Col_.button_hovered, imgui.ImVec4(0.220, 0.250, 0.285, 1.0))
+    style.set_color_(imgui.Col_.check_mark, imgui.ImVec4(0.400, 0.760, 0.950, 1.0))
+    style.set_color_(imgui.Col_.slider_grab, imgui.ImVec4(0.400, 0.760, 0.950, 1.0))
+
+
 def draw_cursor(
     cursor_s: float,
     *,
@@ -39,6 +69,28 @@ def draw_cursor(
         imgui.ImVec2(top.x, top.y + height_px),
         color,
     )
+
+
+def draw_stream_debug(cache, stream, t: float):
+    current = stream.chunk_at(t)
+    cached = cache.cached_indices(stream.name)
+    pending = cache.pending_indices(stream.name)
+    desired = cache.desired_indices(stream.name)
+
+    imgui.text_disabled(
+        f"{stream.kind} | chunk {current + 1}/{stream.n_chunks} | "
+        f"{format_bytes(cache.cached_bytes(stream.name))} cached"
+    )
+
+    if imgui.tree_node(f"Debug##debug_{stream.name}"):
+        imgui.text(f"Time range: {stream.t_min:.3f} - {stream.t_max:.3f} s")
+        imgui.text(f"Duration: {stream.t_max - stream.t_min:.3f} s")
+        imgui.text(f"Chunk size: {format_bytes(stream.chunk_nbytes)}")
+        imgui.text(f"Current chunk: {current}")
+        imgui.text(f"Desired chunks: {fmt_indices(desired)}")
+        imgui.text(f"Loaded chunks: {fmt_indices(cached)}")
+        imgui.text(f"Pending chunks: {fmt_indices(pending)}")
+        imgui.tree_pop()
 
 
 def gui_transport(state):

@@ -32,9 +32,7 @@ class TimeSeries:
             raise ValueError("chunk_samples must be positive")
         self.n_chunks = -(-self.n_samples // self.chunk_samples)
 
-        self.chunk_nbytes = self.chunk_samples * (
-            self.n_channels * values.dtype.itemsize + ts.dtype.itemsize
-        )
+        self.chunk_nbytes = self.chunk_samples * self.n_channels * values.dtype.itemsize
 
     @property
     def duration(self) -> float:
@@ -80,9 +78,9 @@ class TimeSeries:
             data = data[:, np.newaxis]
 
         return {
-            "t_start": float(self.ts[start]),
+            "t_start": self.t_min + start / self.fs,
             "sample_start": start,
             "sample_stop": stop,
-            "n_bytes": self.chunk_nbytes,
+            "n_bytes": data.nbytes,
             "data": data,
         }

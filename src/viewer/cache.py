@@ -42,6 +42,22 @@ class ChunkCache:
     def used_bytes(self) -> int:
         return sum(payload.get("n_bytes", 0) for payload in self.cache.values())
 
+    def cached_indices(self, stream_name: str) -> list[int]:
+        return sorted(idx for name, idx in self.cache if name == stream_name)
+
+    def pending_indices(self, stream_name: str) -> list[int]:
+        return sorted(idx for name, idx in self.pending if name == stream_name)
+
+    def desired_indices(self, stream_name: str) -> list[int]:
+        return sorted(self.desired.get(stream_name, set()))
+
+    def cached_bytes(self, stream_name: str) -> int:
+        return sum(
+            payload.get("n_bytes", 0)
+            for (name, _), payload in self.cache.items()
+            if name == stream_name
+        )
+
     def _is_desired(self, key: ChunkKey) -> bool:
         stream_name, chunk_idx = key
         return chunk_idx in self.desired.get(stream_name, set())

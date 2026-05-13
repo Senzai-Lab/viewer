@@ -4,7 +4,7 @@ from viewer.cache import ChunkCache
 from viewer.controller import TimeController
 from viewer.render import DEFAULT_RENDERERS
 from viewer.stream import Stream
-from viewer.ui import gui_transport
+from viewer.ui import draw_stream_debug, gui_transport, setup_style
 
 
 class AppState:
@@ -89,6 +89,8 @@ def gui_plot(state: AppState):
 def gui_settings(state: AppState):
     for name, stream in state.cache.streams.items():
         if imgui.collapsing_header(f"{name}##settings", imgui.TreeNodeFlags_.default_open):
+            draw_stream_debug(state.cache, stream, state.controller.t_cursor)
+            imgui.separator()
             _, state.visible[name] = imgui.checkbox(f"Visible##{name}", state.visible[name])
             renderer = state.renderers[stream.kind]
             renderer.draw_settings(name, stream, state.settings[name])
@@ -157,7 +159,7 @@ def run_viewer(
     addons = immapp.AddOnsParams()
     addons.with_implot = True
 
-    params.callbacks.setup_imgui_style = lambda: imgui.style_colors_classic()
+    params.callbacks.setup_imgui_style = setup_style
 
     try:
         immapp.run(runner_params=params, add_ons_params=addons)
