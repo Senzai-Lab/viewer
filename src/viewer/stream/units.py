@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -7,7 +8,6 @@ import numpy as np
 
 class Units:
     """Irregular sampled (spike_times, spike_units) arrays."""
-    kind = "units"
 
     def __init__(
         self,
@@ -31,8 +31,8 @@ class Units:
         self.t_max = float(self.ts[-1])
         self.chunk_duration = chunk_duration
 
-        self.n_chunks = max(1, int(np.ceil((self.t_max - self.t_min) / self.chunk_duration)))
-        spikes_per_chunk = int(np.ceil(self._n_spikes / self.n_chunks))
+        self.n_chunks = max(1, math.ceil((self.t_max - self.t_min) / self.chunk_duration))
+        spikes_per_chunk = math.ceil(self._n_spikes / self.n_chunks)
         self.chunk_nbytes = spikes_per_chunk * (ts.dtype.itemsize + values.dtype.itemsize)
 
         ids = unit_ids
@@ -61,8 +61,8 @@ class Units:
             times = chunk["ts"]
             unit_ids = chunk["data"]
 
-            i0 = int(np.searchsorted(times, t0, side="left"))
-            i1 = int(np.searchsorted(times, t1, side="right"))
+            i0 = np.searchsorted(times, t0, side="left")
+            i1 = np.searchsorted(times, t1, side="right")
             if i0 >= i1:
                 continue
 
@@ -83,15 +83,15 @@ class Units:
             )
 
     def chunk_at(self, t: float) -> int:
-        idx = int((t - self.t_min) / self.chunk_duration)
+        idx = math.floor((t - self.t_min) / self.chunk_duration)
         return max(0, min(idx, self.n_chunks - 1))
 
     def load_chunk(self, chunk_idx: int) -> dict:
         t0 = self.t_min + chunk_idx * self.chunk_duration
         t1 = t0 + self.chunk_duration
 
-        i0 = int(np.searchsorted(self.ts, t0, side="left"))
-        i1 = int(np.searchsorted(self.ts, t1, side="left"))
+        i0 = np.searchsorted(self.ts, t0, side="left")
+        i1 = np.searchsorted(self.ts, t1, side="left")
 
         times = self.ts[i0:i1]
         units = np.asarray(self.values[i0:i1], dtype=int)

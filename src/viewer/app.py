@@ -1,8 +1,9 @@
+from typing import Any
+
 from imgui_bundle import hello_imgui, imgui, immapp, implot
 
 from viewer.cache import ChunkCache
 from viewer.controller import TimeController
-from viewer.render import DEFAULT_RENDERERS
 from viewer.stream import Stream
 from viewer.ui import draw_stream_debug, gui_transport, setup_style
 
@@ -10,9 +11,8 @@ from viewer.ui import draw_stream_debug, gui_transport, setup_style
 class AppState:
     def __init__(
             self,
-            streams: list[Stream],
+            streams: list[tuple[Stream, Any]],
             *,
-            renderers=None,
             span: float = 5.0,
             max_workers: int = 2,
     ):
@@ -20,22 +20,16 @@ class AppState:
             raise ValueError("run_viewer needs at least one stream")
 
         self.cache = ChunkCache(max_workers=max_workers)
-        self.renderers = dict(DEFAULT_RENDERERS)
-        if renderers:
-            self.renderers.update(renderers)
         self.settings = {}
         self.visible = {}
 
-        for stream in streams:
-            if stream.kind not in self.renderers:
-                raise ValueError(f"No renderer registered for stream kind: {stream.kind}")
-
+        for stream, settings in streams:
             self.cache.add(stream)
             self.visible[stream.name] = True
-            self.settings[stream.name] = self.renderers[stream.kind].make_settings(stream)
+            self.settings[stream.name] = settings
 
-        t_min = min(s.t_min for s in streams)
-        t_max = max(s.t_max for s in streams)
+        t_min = min(stream.t_min for stream, _ in streams)
+        t_max = max(stream.t_max for stream, _ in streams)
         self.controller = TimeController(t_min=t_min, t_max=t_max, span=span)
 
     def reset(self):
@@ -76,8 +70,8 @@ def gui_plot(state: AppState):
     if implot.begin_subplots("##streams", rows, 1, size, flags):
         for name, stream in visible_streams:
             chunks = cache.get_chunks(name, t)
-            renderer = state.renderers[stream.kind]
-            renderer.draw_plot(stream, chunks, state.settings[name], t, view_t0, view_t1)
+            settings = state.settings[name]
+            settings.draw_plot(stream, chunks, t, view_t0, view_t1)
 
         implot.end_subplots()
         ctrl.update_view(view_t0.value, view_t1.value)
@@ -92,22 +86,20 @@ def gui_settings(state: AppState):
             draw_stream_debug(state.cache, stream, state.controller.t_cursor)
             imgui.separator()
             _, state.visible[name] = imgui.checkbox(f"Visible##{name}", state.visible[name])
-            renderer = state.renderers[stream.kind]
-            renderer.draw_settings(name, stream, state.settings[name])
+            settings = state.settings[name]
+            settings.draw_settings(name, stream)
 
 
 def run_viewer(
-    streams: list[Stream],
+    streams: list[tuple[Stream, Any]],
     *,
     title: str = 'Viewer',
     window_size: tuple[int, int] = (1280, 720),
-    renderers=None,
     span: float = 5.0,
     max_workers: int = 2,
 ):
     state = AppState(
         streams,
-        renderers=renderers,
         span=span,
         max_workers=max_workers,
     )

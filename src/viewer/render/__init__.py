@@ -1,12 +1,11 @@
-from . import timeseries, units
-
-DEFAULT_RENDERERS = {
-    "timeseries": timeseries,
-    "units": units,
-}
+from .ephys import EphysSettings
+from .probe import ProbeSettings
+from .timeseries import TimeSeriesSettings
+from .units import UnitsSettings
 
 __all__ = [
-    "DEFAULT_RENDERERS",
-    "timeseries",
-    "units",
+    "EphysSettings",
+    "ProbeSettings",
+    "TimeSeriesSettings",
+    "UnitsSettings",
 ]

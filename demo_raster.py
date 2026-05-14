@@ -1,6 +1,6 @@
 import zarr
 
-from viewer import Units, run_viewer
+from viewer import Units, UnitsSettings, run_viewer
 
 
 if __name__ == "__main__":
@@ -14,4 +14,4 @@ if __name__ == "__main__":
         metadata=dict(units_grp.attrs),
     )
 
-    run_viewer([units], title="Raster Viewer")
+    run_viewer([(units, UnitsSettings(units))], title="Raster Viewer")

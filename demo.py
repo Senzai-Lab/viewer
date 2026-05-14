@@ -1,6 +1,6 @@
 import zarr
 
-from viewer import TimeSeries, Units, run_viewer
+from viewer import TimeSeries, TimeSeriesSettings, Units, UnitsSettings, run_viewer
 
 root = zarr.open("/Users/iii9781/viewer/scripts/exp1.zarr", mode="r")
 
@@ -13,7 +13,7 @@ ephys = TimeSeries(
 )
 
 pupil = TimeSeries(
-    name="pupil",
+    name="sine",
     values=root["behavior/pupil/values"],
     ts=root["behavior/pupil/ts"],
     fs=root["behavior/pupil"].attrs["fs"],
@@ -28,6 +28,10 @@ units = Units(
 )
 
 run_viewer(
-    [ephys, pupil, units],
+    [
+        (ephys, TimeSeriesSettings()),
+        (pupil, TimeSeriesSettings()),
+        (units, UnitsSettings(units)),
+    ],
     span=5.0,
 )

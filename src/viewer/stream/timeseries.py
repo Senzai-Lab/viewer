@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -7,7 +8,6 @@ import numpy as np
 
 class TimeSeries:
     """Continuous signal: (n_samples, n_channels) values array and timestamps."""
-    kind = "timeseries"
 
     def __init__(
             self,
@@ -39,15 +39,15 @@ class TimeSeries:
         return self.t_max - self.t_min
 
     def iter_visible(self, chunks, t0: float, t1: float, width_px: float):
-        stride = max(1, int(self.fs * (t1 - t0) / max(width_px, 1)))
+        stride = max(1, math.floor(self.fs * (t1 - t0) / max(width_px, 1)))
 
         for chunk in chunks:
             chunk_t0 = chunk["t_start"]
             data = chunk["data"]
             n = data.shape[0]
 
-            i0 = max(0, int(np.floor((t0 - chunk_t0) * self.fs)) - 1)
-            i1 = min(n, int(np.ceil((t1 - chunk_t0) * self.fs)) + 1)
+            i0 = max(0, math.floor((t0 - chunk_t0) * self.fs) - 1)
+            i1 = min(n, math.ceil((t1 - chunk_t0) * self.fs) + 1)
 
             if i0 >= i1:
                 continue
@@ -65,7 +65,7 @@ class TimeSeries:
             )
 
     def chunk_at(self, t: float) -> int:
-        sample_idx = int((t - self.t_min) * self.fs)
+        sample_idx = math.floor((t - self.t_min) * self.fs)
         chunk_idx = sample_idx // self.chunk_samples
         return max(0, min(chunk_idx, self.n_chunks - 1))
 

@@ -5,7 +5,6 @@ from typing import Any, Protocol
 
 class Stream(Protocol):
     name: str
-    kind: str
 
     t_min: float
     t_max: float

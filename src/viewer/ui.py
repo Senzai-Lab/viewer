@@ -1,7 +1,7 @@
 from __future__ import annotations
 from imgui_bundle import imgui, implot, icons_fontawesome_4
 
-from .utils import format_bytes
+from .utils import format_bytes, format_seconds
 
 FA_PLAY = icons_fontawesome_4.ICON_FA_PLAY
 FA_PAUSE = icons_fontawesome_4.ICON_FA_PAUSE
@@ -78,13 +78,13 @@ def draw_stream_debug(cache, stream, t: float):
     desired = cache.desired_indices(stream.name)
 
     imgui.text_disabled(
-        f"{stream.kind} | chunk {current + 1}/{stream.n_chunks} | "
+        f"{type(stream).__name__} | chunk {current + 1}/{stream.n_chunks} | "
         f"{format_bytes(cache.cached_bytes(stream.name))} cached"
     )
 
     if imgui.tree_node(f"Debug##debug_{stream.name}"):
         imgui.text(f"Time range: {stream.t_min:.3f} - {stream.t_max:.3f} s")
-        imgui.text(f"Duration: {stream.t_max - stream.t_min:.3f} s")
+        imgui.text(f"Duration: {format_seconds(stream.t_max - stream.t_min)}")
         imgui.text(f"Chunk size: {format_bytes(stream.chunk_nbytes)}")
         imgui.text(f"Current chunk: {current}")
         imgui.text(f"Desired chunks: {fmt_indices(desired)}")
