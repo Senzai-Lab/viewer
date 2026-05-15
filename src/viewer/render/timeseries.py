@@ -24,7 +24,7 @@ class TimeSeriesSettings:
         pad = max(self.gain, 0.5 * self.spacing, 0.25)
         return -pad, row_max + pad
 
-    def draw_settings(self, name: str, stream: TimeSeries):
+    def draw_settings(self, name: str):
         imgui.set_next_item_width(-1)
         _, self.width = imgui.slider_float(
             f"##width_{name}", self.width, 0.5, 3.0, "Line width: %.1f"

@@ -21,7 +21,8 @@ if __name__ == "__main__":
         geometry,
         fs=fs,
         chunk_samples=10 * fs,
-        units="values",
+        units="uV",
+        scale=0.195
     )
 
     run_viewer([(ephys, EphysSettings(ephys))], title="eeg")

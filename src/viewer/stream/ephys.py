@@ -38,7 +38,15 @@ class Ephys:
         self.chunk_samples = int(chunk_samples)
 
         self.n_chunks = -(-self.n_samples // self.chunk_samples)
-        self.dtype = np.dtype(values.dtype)
+        self.source_dtype = np.dtype(values.dtype)
+        if not (
+            np.issubdtype(self.source_dtype, np.integer)
+            or np.issubdtype(self.source_dtype, np.floating)
+        ):
+            raise TypeError(
+                f"Ephys values must be a real numeric array, got {self.source_dtype}"
+            )
+        self.dtype = np.result_type(self.source_dtype, np.float32)
         self.chunk_nbytes = self.chunk_samples * self.n_channels * self.dtype.itemsize
 
         self.scale = float(scale)
@@ -58,7 +66,9 @@ class Ephys:
         start = chunk_idx * self.chunk_samples
         stop = min(start + self.chunk_samples, self.n_samples)
 
-        data = np.array(self.values[start:stop], copy=True, order="F")
+        data = np.array(self.values[start:stop], dtype=self.dtype, copy=True, order="F")
+        data *= self.scale
+        data += self.offset
 
         return {
             "sample_start": start,
@@ -83,7 +93,7 @@ class Ephys:
         samples_per_px = self.fs * (t1 - t0) / width_px
 
         if samples_per_px <= envelope_threshold:
-            yield from self._iter_raw(chunks, t0, t1, channel_indices)
+            yield from self._iter_raw(chunks, t0, t1)
             return
 
         samples_per_bin = math.ceil(samples_per_px)
@@ -95,7 +105,7 @@ class Ephys:
             samples_per_bin,
         )
 
-    def _iter_raw(self, chunks, t0: float, t1: float, channel_indices: np.ndarray):
+    def _iter_raw(self, chunks, t0: float, t1: float):
         for chunk in chunks:
             chunk_start = chunk["sample_start"]
             n = chunk["data"].shape[0]
@@ -111,11 +121,10 @@ class Ephys:
             sample_start = chunk["sample_start"] + i0
             yield {
                 "mode": "raw",
-                "data": np.asfortranarray(chunk["data"][i0:i1, channel_indices]),
+                "data": chunk["data"][i0:i1],
                 "sample_start": sample_start,
                 "sample_stop": chunk["sample_start"] + i1,
                 "dt": 1.0 / self.fs,
-                "channel_indices": channel_indices,
             }
 
     def _iter_envelope(
@@ -188,5 +197,4 @@ class Ephys:
                 "y_min": np.asfortranarray(y_min),
                 "y_max": np.asfortranarray(y_max),
                 "samples_per_bin": samples_per_bin,
-                "channel_indices": channel_indices,
             }

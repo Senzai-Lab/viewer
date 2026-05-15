@@ -5,7 +5,6 @@ from imgui_bundle import imgui, implot
 
 from . import probe
 from viewer.stream import Ephys
-from viewer.ui import draw_cursor
 
 
 class EphysSettings:
@@ -13,13 +12,9 @@ class EphysSettings:
         self,
         stream: Ephys,
         *,
-        gain: float = 1.0,
-        spacing: float = 1.0,
         width: float = 1.0,
         envelope_threshold: float = 2.0,
     ):
-        self.gain = gain
-        self.spacing = spacing
         self.width = width
         self.envelope_threshold = envelope_threshold
         self.probe = probe.ProbeSettings(stream.geometry)
@@ -28,27 +23,15 @@ class EphysSettings:
     def y_limits(self, n_channels: int) -> tuple[float, float]:
         if n_channels == 0:
             return -1.0, 1.0
-        row_max = (n_channels - 1) * self.spacing
-        pad = max(abs(self.gain), 0.5 * self.spacing, 0.25)
+        row_max = n_channels - 1
+        pad = 1.0
         return -pad, row_max + pad
 
-    def draw_settings(self, name: str, stream: Ephys):
+    def draw_settings(self, name: str):
         imgui.text("Line width")
         imgui.set_next_item_width(-1)
         _, self.width = imgui.slider_float(
             f"##width_{name}", self.width, 0.5, 4.0, "%.1f"
-        )
-
-        imgui.text("Gain")
-        imgui.set_next_item_width(-1)
-        _, self.gain = imgui.slider_float(
-            f"##gain_{name}", self.gain, 0.05, 50.0, "%.2f"
-        )
-
-        imgui.text("Channel spacing")
-        imgui.set_next_item_width(-1)
-        _, self.spacing = imgui.slider_float(
-            f"##spacing_{name}", self.spacing, 0.1, 200.0, "%.1f"
         )
 
         imgui.separator()
@@ -75,7 +58,7 @@ class EphysSettings:
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
     ):
-        channel_indices = np.flatnonzero(self.probe.visible)
+        channel_indices = np.asarray(np.flatnonzero(self.probe.visible), dtype=np.intp)
         visible_count = int(len(channel_indices))
         y_limits = self.y_limits(visible_count)
 
@@ -100,11 +83,10 @@ class EphysSettings:
                     envelope_threshold=self.envelope_threshold,
                 ):
                     if item["mode"] == "raw":
-                        _plot_raw(stream, item, self)
+                        _plot_raw(stream, item, self, channel_indices)
                     else:
-                        _plot_envelope(stream, item, self)
+                        _plot_envelope(item, self, channel_indices)
 
-            draw_cursor(t)
             implot.end_plot()
 
 
@@ -145,22 +127,20 @@ def _plot_raw(
     stream: Ephys,
     item: dict,
     settings: EphysSettings,
+    channel_indices: np.ndarray,
 ):
     xstart = item["sample_start"] / stream.fs
     xscale = item["dt"]
     data = item["data"]
-    channel_indices = item["channel_indices"]
 
     for col, ch_idx, highlighted in _iter_plot_channels(
         channel_indices,
         settings.probe.hovered_idx,
     ):
         row = col
-        ys = np.ascontiguousarray(data[:, col])
-        ys = (
-            (ys * stream.scale + stream.offset) * settings.gain
-            + row * settings.spacing
-        )
+        ys = np.ascontiguousarray(data[:, ch_idx])
+        if row != 0:
+            ys = ys + row
         spec = implot.Spec(line_weight=_trace_line_weight(settings, highlighted))
         spec.line_color = settings.probe.channel_color_vec(
             ch_idx,
@@ -177,13 +157,12 @@ def _plot_raw(
 
 
 def _plot_envelope(
-    stream: Ephys,
     item: dict,
     settings: EphysSettings,
+    channel_indices: np.ndarray,
 ):
     xs = np.ascontiguousarray(item["t"])
     draw_list = implot.get_plot_draw_list()
-    channel_indices = item["channel_indices"]
 
     implot.push_plot_clip_rect()
     try:
@@ -192,12 +171,8 @@ def _plot_envelope(
             settings.probe.hovered_idx,
         ):
             row = col
-            y_min = item["y_min"][:, col] * stream.scale + stream.offset
-            y_max = item["y_max"][:, col] * stream.scale + stream.offset
-            y1 = y_min * settings.gain + row * settings.spacing
-            y2 = y_max * settings.gain + row * settings.spacing
-            lo = np.minimum(y1, y2)
-            hi = np.maximum(y1, y2)
+            lo = np.ascontiguousarray(item["y_min"][:, col] + row)
+            hi = np.ascontiguousarray(item["y_max"][:, col] + row)
             color = settings.probe.channel_color_u32(
                 ch_idx,
                 alpha=1.0 if highlighted else 0.9,

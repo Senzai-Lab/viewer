@@ -87,7 +87,7 @@ def gui_settings(state: AppState):
             imgui.separator()
             _, state.visible[name] = imgui.checkbox(f"Visible##{name}", state.visible[name])
             settings = state.settings[name]
-            settings.draw_settings(name, stream)
+            settings.draw_settings(name)
 
 
 def run_viewer(
