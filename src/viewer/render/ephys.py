@@ -10,22 +10,31 @@ from viewer.stream import Ephys
 class EphysSettings:
     def __init__(
         self,
-        stream: Ephys,
+        geometry: dict | Ephys,
         *,
         width: float = 1.0,
+        gain: float = 1.0,
         envelope_threshold: float = 2.0,
+        plot_shank_gap: float = 4.0,
     ):
         self.width = width
+        self.gain = gain
         self.envelope_threshold = envelope_threshold
-        self.probe = probe.ProbeSettings(stream.geometry)
+        if isinstance(geometry, Ephys):
+            geometry = geometry.geometry
+        self.probe = probe.ProbeSettings(
+            geometry,
+            plot_shank_gap=plot_shank_gap,
+        )
         self._last_y_limits: tuple[float, float] | None = None
 
-    def y_limits(self, n_channels: int) -> tuple[float, float]:
-        if n_channels == 0:
+    def y_limits(self, channel_indices: np.ndarray) -> tuple[float, float]:
+        if len(channel_indices) == 0:
             return -1.0, 1.0
-        row_max = n_channels - 1
+
+        ys = self.probe.plot_y[channel_indices]
         pad = 1.0
-        return -pad, row_max + pad
+        return float(ys.min() - pad), float(ys.max() + pad)
 
     def draw_settings(self, name: str):
         imgui.text("Line width")
@@ -33,6 +42,9 @@ class EphysSettings:
         _, self.width = imgui.slider_float(
             f"##width_{name}", self.width, 0.5, 4.0, "%.1f"
         )
+        imgui.text("Signal gain")
+        imgui.set_next_item_width(-1)
+        _, self.gain = imgui.input_float(f"##gain_{name}", self.gain, format="%.4f")
 
         imgui.separator()
         if imgui.button(f"All##probe_all_{name}"):
@@ -60,10 +72,10 @@ class EphysSettings:
     ):
         channel_indices = np.asarray(np.flatnonzero(self.probe.visible), dtype=np.intp)
         visible_count = int(len(channel_indices))
-        y_limits = self.y_limits(visible_count)
+        y_limits = self.y_limits(channel_indices)
 
         if implot.begin_plot(f"{stream.name}", flags=implot.Flags_.no_legend):
-            implot.setup_axes("Time (s)", stream.units, 0, 0)
+            implot.setup_axes("Time (s)", "Channel offset", 0, 0)
             _setup_y_limits(self, y_limits)
             implot.setup_axis_zoom_constraints(implot.ImAxis_.y1, 1e-6, 1e12)
             implot.setup_axis_links(implot.ImAxis_.x1, view_t0, view_t1)
@@ -133,14 +145,12 @@ def _plot_raw(
     xscale = item["dt"]
     data = item["data"]
 
-    for col, ch_idx, highlighted in _iter_plot_channels(
+    for _, ch_idx, highlighted in _iter_plot_channels(
         channel_indices,
         settings.probe.hovered_idx,
     ):
-        row = col
-        ys = np.ascontiguousarray(data[:, ch_idx])
-        if row != 0:
-            ys = ys + row
+        baseline = settings.probe.plot_y[ch_idx]
+        ys = np.ascontiguousarray(data[:, ch_idx] * settings.gain + baseline)
         spec = implot.Spec(line_weight=_trace_line_weight(settings, highlighted))
         spec.line_color = settings.probe.channel_color_vec(
             ch_idx,
@@ -170,9 +180,13 @@ def _plot_envelope(
             channel_indices,
             settings.probe.hovered_idx,
         ):
-            row = col
-            lo = np.ascontiguousarray(item["y_min"][:, col] + row)
-            hi = np.ascontiguousarray(item["y_max"][:, col] + row)
+            baseline = settings.probe.plot_y[ch_idx]
+            lo = np.ascontiguousarray(
+                item["y_min"][:, col] * settings.gain + baseline
+            )
+            hi = np.ascontiguousarray(
+                item["y_max"][:, col] * settings.gain + baseline
+            )
             color = settings.probe.channel_color_u32(
                 ch_idx,
                 alpha=1.0 if highlighted else 0.9,

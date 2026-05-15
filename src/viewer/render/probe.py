@@ -15,6 +15,7 @@ class ProbeSettings:
         self,
         geometry: dict,
         shank_gap: int = 4,
+        plot_shank_gap: float = 4.0,
     ):
         self.channel_ids = np.asarray(geometry["channel_ids"])
         self.shank_ids = np.asarray(geometry["shank_ids"])
@@ -27,6 +28,14 @@ class ProbeSettings:
         self._shank_color_indices = {
             int(shank): i for i, shank in enumerate(self.shanks)
         }
+        self.plot_y = plot_y_positions(
+            geometry,
+            self.shank_ids,
+            self.x,
+            self.y,
+            plot_shank_gap,
+        )
+        self._custom_colors = geometry_colors(geometry, self.n_channels)
         self.xg, self.yg = prb_to_grid(
             self.shank_ids,
             self.x,
@@ -51,6 +60,13 @@ class ProbeSettings:
         alpha: float = 1.0,
         brighten: float = 0.0,
     ) -> imgui.ImVec4:
+        if self._custom_colors is not None:
+            return apply_color_alpha_brighten(
+                self._custom_colors[ch],
+                alpha=alpha,
+                brighten=brighten,
+            )
+
         shank = int(self.shank_ids[ch])
         color_idx = self._shank_color_indices[shank]
         return shank_color_vec(color_idx, alpha=alpha, brighten=brighten)
@@ -82,6 +98,80 @@ def prb_to_grid(
     # Screen y increases downward.
     yg = yg.max() - yg
     return xg, yg
+
+
+def plot_y_positions(
+    geometry: dict,
+    shank_ids: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
+    shank_gap: float = 4.0,
+) -> np.ndarray:
+    for key in ("display_y", "display_index"):
+        if key in geometry:
+            plot_y = np.asarray(geometry[key], dtype=np.float32)
+            if len(plot_y) != len(shank_ids):
+                raise ValueError(
+                    f"geometry[{key!r}] must have one value per channel"
+                )
+            return plot_y
+
+    plot_y = np.zeros(len(shank_ids), dtype=np.float32)
+    cursor = 0.0
+
+    for shank in np.unique(shank_ids):
+        mask = shank_ids == shank
+        indices = np.flatnonzero(mask)
+        order = indices[np.lexsort((indices, x[indices], y[indices]))]
+        plot_y[order] = cursor + np.arange(len(order), dtype=np.float32)
+        cursor += len(order) + shank_gap
+
+    return plot_y
+
+
+def geometry_colors(
+    geometry: dict,
+    n_channels: int,
+) -> list[imgui.ImVec4] | None:
+    for key in ("colors", "color_hex", "channel_colors"):
+        if key not in geometry:
+            continue
+
+        colors = list(geometry[key])
+        if len(colors) != n_channels:
+            raise ValueError(f"geometry[{key!r}] must have one color per channel")
+        return [parse_color(c) for c in colors]
+
+    return None
+
+
+def parse_color(color: object) -> imgui.ImVec4:
+    if isinstance(color, str):
+        value = color.strip()
+        if value.startswith("#"):
+            value = value[1:]
+        if len(value) not in (6, 8):
+            raise ValueError("Hex colors must be #RRGGBB or #RRGGBBAA")
+
+        channels = [
+            int(value[i : i + 2], 16) / 255.0
+            for i in range(0, len(value), 2)
+        ]
+        if len(channels) == 3:
+            channels.append(1.0)
+        return imgui.ImVec4(*channels)
+
+    if isinstance(color, (tuple, list, np.ndarray)):
+        channels = [float(v) for v in color]
+        if len(channels) not in (3, 4):
+            raise ValueError("Colors must have 3 or 4 channels")
+        if any(abs(v) > 1.0 for v in channels):
+            channels = [v / 255.0 for v in channels]
+        if len(channels) == 3:
+            channels.append(1.0)
+        return imgui.ImVec4(*channels)
+
+    raise TypeError("Colors must be hex strings or RGB/RGBA sequences")
 
 
 def _hit_rect(mouse: imgui.ImVec2, p1: imgui.ImVec2, p2: imgui.ImVec2) -> bool:
@@ -125,6 +215,15 @@ def shank_color_vec(
     brighten: float = 0.0,
 ) -> imgui.ImVec4:
     color = implot.get_colormap_color(color_idx)
+    return apply_color_alpha_brighten(color, alpha=alpha, brighten=brighten)
+
+
+def apply_color_alpha_brighten(
+    color: imgui.ImVec4,
+    *,
+    alpha: float = 1.0,
+    brighten: float = 0.0,
+) -> imgui.ImVec4:
     x, y, z, w = color.x, color.y, color.z, color.w
     if brighten > 0.0:
         amount = min(max(brighten, 0.0), 1.0)

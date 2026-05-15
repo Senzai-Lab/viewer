@@ -53,11 +53,6 @@ class TimeController:
         pan_delta = new_center - old_center
         panned = abs(pan_delta) > 1e-6
         zoomed = abs(new_span - old_span) > 1e-6
-
-        if self.is_playing:
-            self.forward = self.playback_speed >= 0
-        elif panned:
-            self.forward = pan_delta > 0
         
         if panned and not zoomed:
             self.t_cursor = self._clamp(new_center)

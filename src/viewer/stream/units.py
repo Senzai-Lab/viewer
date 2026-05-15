@@ -20,38 +20,32 @@ class Units:
         unit_ids=None,
     ):
         self.name = name
-        raw_metadata = dict(metadata or {})
-
         self.values = values
+        self.metadata = {} if metadata is None else metadata
+
         # Load spike timestamps for fast searchsorted.
         self.ts = np.asarray(ts)
 
         self._n_spikes = len(self.ts)
         self.t_min = float(self.ts[0])
         self.t_max = float(self.ts[-1])
-        self.chunk_duration = chunk_duration
+        self.duration = self.t_max - self.t_min
 
+        self.chunk_duration = chunk_duration
         self.n_chunks = max(1, math.ceil((self.t_max - self.t_min) / self.chunk_duration))
         spikes_per_chunk = math.ceil(self._n_spikes / self.n_chunks)
         self.chunk_nbytes = spikes_per_chunk * (ts.dtype.itemsize + values.dtype.itemsize)
 
         ids = unit_ids
         if ids is None:
-            ids = raw_metadata.pop("unit_ids", None)
+            ids = self.metadata.get("unit_ids")
+        if ids is None and "rate" in self.metadata:
+            ids = self.metadata["rate"].keys()
         if ids is None:
-            ids = raw_metadata["rate"].keys() if "rate" in raw_metadata else np.unique(values[:])
+            ids = np.unique(values[:])
 
-        self.unit_ids = [int(uid) for uid in ids]
+        self.unit_ids = np.asarray([int(uid) for uid in ids])
         self.n_units = len(self.unit_ids)
-        self.metadata = {
-            key: np.array([values[str(uid)] for uid in self.unit_ids], dtype=float)
-            for key, values in raw_metadata.items()
-        }
-        self.metadata_keys = list(self.metadata)
-
-    @property
-    def duration(self) -> float:
-        return self.t_max - self.t_min
 
     def iter_visible(self, chunks, t0: float, t1: float, width_px: float):
         n_bins = max(1, int(width_px))
@@ -94,7 +88,7 @@ class Units:
         i1 = np.searchsorted(self.ts, t1, side="left")
 
         times = self.ts[i0:i1]
-        units = np.asarray(self.values[i0:i1], dtype=int)
+        units = np.asarray(self.values[i0:i1])
 
         return {
             "t_start": t0,

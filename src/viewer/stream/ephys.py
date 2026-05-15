@@ -32,30 +32,20 @@ class Ephys:
 
         self.t_min = 0.0
         self.t_max = (self.n_samples - 1) / self.fs
+        self.duration = self.t_max - self.t_min
 
         if chunk_samples is None:
             chunk_samples = int(5 * self.fs)
         self.chunk_samples = int(chunk_samples)
 
         self.n_chunks = -(-self.n_samples // self.chunk_samples)
-        self.source_dtype = np.dtype(values.dtype)
-        if not (
-            np.issubdtype(self.source_dtype, np.integer)
-            or np.issubdtype(self.source_dtype, np.floating)
-        ):
-            raise TypeError(
-                f"Ephys values must be a real numeric array, got {self.source_dtype}"
-            )
+        self.source_dtype = values.dtype
         self.dtype = np.result_type(self.source_dtype, np.float32)
         self.chunk_nbytes = self.chunk_samples * self.n_channels * self.dtype.itemsize
 
         self.scale = float(scale)
         self.offset = float(offset)
         self.units = units
-
-    @property
-    def duration(self) -> float:
-        return self.t_max - self.t_min
 
     def chunk_at(self, t: float) -> int:
         sample_idx = math.floor(t * self.fs)

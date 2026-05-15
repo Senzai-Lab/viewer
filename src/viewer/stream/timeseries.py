@@ -25,6 +25,8 @@ class TimeSeries:
         self.fs = float(fs)
         self.t_min = float(ts[0])
         self.t_max = float(ts[-1])
+        self.duration = self.t_max - self.t_min
+
         self.n_samples = values.shape[0]
         self.n_channels = values.shape[1] if values.ndim > 1 else 1
         self.chunk_samples = int(chunk_samples)
@@ -33,10 +35,6 @@ class TimeSeries:
         self.n_chunks = -(-self.n_samples // self.chunk_samples)
 
         self.chunk_nbytes = self.chunk_samples * self.n_channels * values.dtype.itemsize
-
-    @property
-    def duration(self) -> float:
-        return self.t_max - self.t_min
 
     def iter_visible(self, chunks, t0: float, t1: float, width_px: float):
         stride = max(1, math.floor(self.fs * (t1 - t0) / max(width_px, 1)))

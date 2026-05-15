@@ -20,18 +20,19 @@ pupil = TimeSeries(
     chunk_samples=root["behavior/pupil/values"].chunks[0],
 )
 
+units_metadata = dict(root["units"].attrs)
 units = Units(
     name="units",
     ts=root["units/spike_times"],
     values=root["units/spike_units"],
-    metadata=dict(root["units"].attrs),
+    metadata=units_metadata,
 )
 
 run_viewer(
     [
         (ephys, TimeSeriesSettings()),
         (pupil, TimeSeriesSettings()),
-        (units, UnitsSettings(units)),
+        (units, UnitsSettings(metadata=units_metadata)),
     ],
     span=5.0,
 )
