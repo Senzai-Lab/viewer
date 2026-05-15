@@ -23,8 +23,9 @@ class Units:
         self.values = values
         self.metadata = {} if metadata is None else metadata
 
-        # Load spike timestamps for fast searchsorted.
-        self.ts = np.asarray(ts)
+        # Load spike timestamps for fast searchsorted. Keep them as times;
+        # narrowing to integer dtypes loses sub-second spike timing.
+        self.ts = np.asarray(ts, dtype=np.float64)
 
         self._n_spikes = len(self.ts)
         self.t_min = float(self.ts[0])
@@ -44,7 +45,7 @@ class Units:
         if ids is None:
             ids = np.unique(values[:])
 
-        self.unit_ids = np.asarray([int(uid) for uid in ids])
+        self.unit_ids = np.asarray([int(uid) for uid in ids], dtype=np.int64)
         self.n_units = len(self.unit_ids)
 
     def iter_visible(self, chunks, t0: float, t1: float, width_px: float):
@@ -63,12 +64,13 @@ class Units:
             visible_t = times[i0:i1]
             visible_u = unit_ids[i0:i1]
 
-            bins = ((visible_t - t0) / bin_width).astype(int)
+            bins = ((visible_t - t0) / bin_width).astype(np.int64)
             np.clip(bins, 0, n_bins - 1, out=bins)
 
             # Use bins only to reduce overdraw; draw selected spikes at their
             # original timestamps so playback does not quantize them to a moving grid.
-            codes = visible_u * n_bins + bins
+            unit_codes = visible_u.astype(np.int64, copy=False)
+            codes = unit_codes * np.int64(n_bins) + bins
             _, keep = np.unique(codes, return_index=True)
 
             yield (

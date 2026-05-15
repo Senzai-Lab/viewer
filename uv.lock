@@ -1776,6 +1776,20 @@ wheels = [
 ]
 
 [[package]]
+name = "probeinterface"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ad/b6/149976dac9228c39a80fd1dee1743b3ba8e878b8c425df4304a7ac395aa1/probeinterface-0.3.2.tar.gz", hash = "sha256:8cf02afb1f344be027e1f29e7a2c54fd35b38573ad77890fc5076f957ddf3db5", size = 6681139, upload-time = "2026-03-20T16:06:09.401Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c9/c9/7cd477fa3cc6e31b643c1ca8d13a7b398fa8c2b6a9c5926cab916729cf43/probeinterface-0.3.2-py3-none-any.whl", hash = "sha256:f288d013697a73836384a9ee8db6bc979764814b981b6730d463d3bd04d5f317", size = 68822, upload-time = "2026-03-20T16:06:08.059Z" },
+]
+
+[[package]]
 name = "prometheus-client"
 version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2450,6 +2464,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "opencv-python" },
+    { name = "probeinterface" },
     { name = "pynapple" },
     { name = "requests" },
     { name = "zarr" },
@@ -2473,6 +2488,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "numpy", marker = "extra == 'test'", specifier = ">=1.26" },
     { name = "opencv-python", specifier = ">=4.13.0.92" },
+    { name = "probeinterface", specifier = ">=0.3.2" },
     { name = "pynapple", specifier = ">=0.11.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
     { name = "requests", specifier = ">=2.33.1" },

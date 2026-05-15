@@ -39,12 +39,14 @@ class EphysSettings:
     def draw_settings(self, name: str):
         imgui.text("Line width")
         imgui.set_next_item_width(-1)
-        _, self.width = imgui.slider_float(
-            f"##width_{name}", self.width, 0.5, 4.0, "%.1f"
+        _, self.width = imgui.drag_float(
+            f"##width_{name}", self.width, 0.05, 0.5, 4.0, "%.1f"
         )
         imgui.text("Signal gain")
         imgui.set_next_item_width(-1)
-        _, self.gain = imgui.input_float(f"##gain_{name}", self.gain, format="%.4f")
+        _, self.gain = imgui.drag_float(
+            f"##gain_{name}", self.gain, 0.01, 0.0, 0.0, "%.4f"
+        )
 
         imgui.separator()
         if imgui.button(f"All##probe_all_{name}"):

@@ -61,11 +61,7 @@ def gui_plot(state: AppState):
 
     rows = len(visible_streams)
     size = imgui.ImVec2(-1, imgui.get_content_region_avail().y)
-    flags = (
-        implot.SubplotFlags_.link_all_x
-        | implot.SubplotFlags_.no_menus
-        | implot.SubplotFlags_.no_title
-    )
+    flags = (implot.SubplotFlags_.no_menus | implot.SubplotFlags_.no_title)
 
     if implot.begin_subplots("##streams", rows, 1, size, flags):
         for name, stream in visible_streams:
@@ -82,12 +78,14 @@ def gui_plot(state: AppState):
 
 def gui_settings(state: AppState):
     for name, stream in state.cache.streams.items():
-        if imgui.collapsing_header(f"{name}##settings", imgui.TreeNodeFlags_.default_open):
-            draw_stream_debug(state.cache, stream, state.controller.t_cursor)
-            imgui.separator()
+        if imgui.collapsing_header(f"{name}##settings"):
             _, state.visible[name] = imgui.checkbox(f"Visible##{name}", state.visible[name])
+            draw_stream_debug(state.cache, stream, state.controller.t_cursor)
             settings = state.settings[name]
-            settings.draw_settings(name)
+            if imgui.tree_node_ex(f"Settings##stream_settings_{name}"):
+                settings.draw_settings(name)
+                imgui.tree_pop()
+
 
 
 def run_viewer(
@@ -125,25 +123,31 @@ def run_viewer(
     split_bottom.new_dock = "TransportDock"
     split_bottom.direction = imgui.Dir_.down
     split_bottom.ratio = 0.08
+    params.docking_params.main_dock_space_node_flags = imgui.DockNodeFlags_.auto_hide_tab_bar
 
     # --- dockable windows ---
+    dock_window_flags = imgui.WindowFlags_.no_title_bar
+
     win_plot = hello_imgui.DockableWindow()
     win_plot.label = "Streams"
     win_plot.dock_space_name = "MainDockSpace"
     win_plot.gui_function = lambda: gui_plot(state)
     win_plot.can_be_closed = False
+    win_plot.imgui_window_flags = dock_window_flags
 
     win_transport = hello_imgui.DockableWindow()
     win_transport.label = "Transport"
     win_transport.dock_space_name = "TransportDock"
     win_transport.gui_function = lambda: gui_transport(state)
     win_transport.can_be_closed = False
+    win_transport.imgui_window_flags = dock_window_flags | imgui.WindowFlags_.no_move
 
     win_settings = hello_imgui.DockableWindow()
     win_settings.label = "Settings"
     win_settings.dock_space_name = "SettingsDock"
     win_settings.gui_function = lambda: gui_settings(state)
     win_settings.can_be_closed = False
+    # win_settings.imgui_window_flags = dock_window_flags
 
     params.docking_params.docking_splits = [split_right, split_bottom]
     params.docking_params.dockable_windows = [win_plot, win_transport, win_settings]

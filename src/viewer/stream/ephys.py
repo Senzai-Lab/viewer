@@ -15,7 +15,7 @@ class Ephys:
         values: Any,
         geometry: dict,
         *,
-        fs: float = 30_000,
+        fs: float = 1250.0,
         chunk_samples: int | None = None,
         scale: float = 1.0,
         offset: float = 0.0,

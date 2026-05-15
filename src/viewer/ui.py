@@ -17,6 +17,36 @@ def fmt_indices(indices: list[int]) -> str:
     return ", ".join(str(i) for i in indices)
 
 
+def _draw_chunk_boxes(name: str, current: int, cached: list[int], pending: list[int]):
+    cached = set(cached)
+    pending = set(pending)
+    indices = [current - 1, current, current + 1]
+
+    box = 10.0
+    gap = 4.0
+    width = len(indices) * box + (len(indices) - 1) * gap
+    size = imgui.ImVec2(width, box)
+    p0 = imgui.get_cursor_screen_pos()
+    imgui.invisible_button(f"##chunk_boxes_{name}", size)
+
+    draw = imgui.get_window_draw_list()
+    for slot, idx in enumerate(indices):
+        x = p0.x + slot * (box + gap)
+        a = imgui.ImVec2(x, p0.y)
+        b = imgui.ImVec2(x + box, p0.y + box)
+
+        if idx in cached:
+            color = imgui.IM_COL32(76, 175, 80, 255)
+        elif idx in pending:
+            color = imgui.IM_COL32(235, 190, 80, 255)
+        else:
+            color = imgui.IM_COL32(85, 90, 98, 255)
+
+        draw.add_rect_filled(a, b, color, 2.0)
+        border = imgui.IM_COL32(230, 235, 245, 220) if idx == current else imgui.IM_COL32(20, 22, 26, 180)
+        draw.add_rect(a, b, border, 2.0, thickness=1.0)
+
+
 def setup_style():
     imgui.style_colors_dark()
 
@@ -29,7 +59,7 @@ def setup_style():
     style.window_padding = imgui.ImVec2(10, 8)
     style.frame_padding = imgui.ImVec2(7, 4)
     style.item_spacing = imgui.ImVec2(8, 6)
-    style.scrollbar_size = 12.0
+    style.scrollbar_size = 10.0
 
     style.set_color_(imgui.Col_.window_bg, imgui.ImVec4(0.075, 0.080, 0.090, 1.0))
     style.set_color_(imgui.Col_.child_bg, imgui.ImVec4(0.060, 0.064, 0.072, 1.0))
@@ -78,15 +108,15 @@ def draw_stream_debug(cache, stream, t: float):
     desired = cache.desired_indices(stream.name)
 
     imgui.text_disabled(
-        f"{type(stream).__name__} | chunk {current + 1}/{stream.n_chunks} | "
+        f"chunk {current + 1}/{stream.n_chunks} | "
         f"{format_bytes(cache.cached_bytes(stream.name))} cached"
     )
+    _draw_chunk_boxes(stream.name, current, cached, pending)
+    imgui.text_disabled(f"Time range: {stream.t_min:.3f} - {stream.t_max:.3f} s")
+    imgui.text_disabled(f"Duration: {format_seconds(stream.duration)}")
+    imgui.text_disabled(f"Chunk size: {format_bytes(stream.chunk_nbytes)}")
 
     if imgui.tree_node(f"Debug##debug_{stream.name}"):
-        imgui.text(f"Time range: {stream.t_min:.3f} - {stream.t_max:.3f} s")
-        imgui.text(f"Duration: {format_seconds(stream.t_max - stream.t_min)}")
-        imgui.text(f"Chunk size: {format_bytes(stream.chunk_nbytes)}")
-        imgui.text(f"Current chunk: {current}")
         imgui.text(f"Desired chunks: {fmt_indices(desired)}")
         imgui.text(f"Loaded chunks: {fmt_indices(cached)}")
         imgui.text(f"Pending chunks: {fmt_indices(pending)}")
@@ -114,9 +144,11 @@ def gui_transport(state):
         state.reset()
     imgui.same_line()
 
-    # --- speed input ---
-    imgui.set_next_item_width(35.0)
-    changed, new_speed = imgui.input_float("##speed", ctrl.playback_speed, format="%.1f")
+    # --- speed slider ---
+    imgui.set_next_item_width(70.0)
+    changed, new_speed = imgui.drag_float(
+        "##speed", ctrl.playback_speed, 0.05, -5.0, 10.0, "%.1fx"
+    )
     if imgui.is_item_hovered(imgui.HoveredFlags_.stationary):
         imgui.set_tooltip("Playback speed")
     if changed:

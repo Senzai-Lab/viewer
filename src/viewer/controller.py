@@ -11,12 +11,13 @@ class TimeController:
         self.t_max = t_max
         self.is_playing: bool = False
         self.playback_speed = playback_speed
+        self.init_span = span
 
         # viewport
         self.view_t0 = t_min
         self.view_t1 = t_min + span
+        self.init_span = span
         self.span = span
-        self.forward = True
 
     def toggle(self):
         self.is_playing = not self.is_playing
@@ -70,7 +71,6 @@ class TimeController:
     
     def reset(self):
         self.is_playing = False
-        self.span = 5.0
+        self.span = self.init_span
         self.playback_speed = 1.0
-        self.forward = True
         self.jump_to(self.t_min)

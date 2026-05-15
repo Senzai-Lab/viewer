@@ -26,16 +26,16 @@ class TimeSeriesSettings:
 
     def draw_settings(self, name: str):
         imgui.set_next_item_width(-1)
-        _, self.width = imgui.slider_float(
-            f"##width_{name}", self.width, 0.5, 3.0, "Line width: %.1f"
+        _, self.width = imgui.drag_float(
+            f"##width_{name}", self.width, 0.05, 0.5, 3.0, "Line width: %.1f"
         )
         imgui.set_next_item_width(-1)
-        _, self.gain = imgui.slider_float(
-            f"##gain_{name}", self.gain, 0.1, 20.0, "Gain: %.1f"
+        _, self.gain = imgui.drag_float(
+            f"##gain_{name}", self.gain, 0.1, 0.1, 20.0, "Gain: %.1f"
         )
         imgui.set_next_item_width(-1)
-        _, self.spacing = imgui.slider_float(
-            f"##spacing_{name}", self.spacing, 0.0, 100.0, "Channel spacing: %.0f"
+        _, self.spacing = imgui.drag_float(
+            f"##spacing_{name}", self.spacing, 1.0, 0.0, 100.0, "Channel spacing: %.0f"
         )
 
     def draw_plot(

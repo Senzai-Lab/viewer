@@ -148,18 +148,18 @@ class UnitsSettings:
 
         imgui.text("Tick height")
         imgui.set_next_item_width(-1)
-        _, self.tick_height = imgui.slider_float(
-            f"##tick_{name}", self.tick_height, 1.0, 20.0, "%.1f px"
+        _, self.tick_height = imgui.drag_float(
+            f"##tick_{name}", self.tick_height, 0.2, 1.0, 20.0, "%.1f px"
         )
         imgui.text("Tick width")
         imgui.set_next_item_width(-1)
-        _, self.width = imgui.slider_float(
-            f"##width_{name}", self.width, 0.5, 4.0, "%.1f"
+        _, self.width = imgui.drag_float(
+            f"##width_{name}", self.width, 0.05, 0.5, 4.0, "%.1f"
         )
         imgui.text("Unit spacing")
         imgui.set_next_item_width(-1)
-        _, self.spacing = imgui.slider_float(
-            f"##spacing_{name}", self.spacing, 0.1, 5.0, "%.1f"
+        _, self.spacing = imgui.drag_float(
+            f"##spacing_{name}", self.spacing, 0.05, 0.1, 5.0, "%.1f"
         )
 
     def draw_plot(
