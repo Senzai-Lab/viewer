@@ -19,14 +19,12 @@ class UnitsSettings:
         *,
         tick_height: float = 5.0,
         width: float = 1.0,
-        spacing: float = 1.0,
         cmap: str = DEFAULT_CMAP,
         sort_by: str = "",
         color_by: str = "",
     ):
         self.tick_height = tick_height
         self.width = width
-        self.spacing = spacing
         self.cmap = cmap
         self.sort_by = sort_by
         self.color_by = color_by
@@ -108,9 +106,9 @@ class UnitsSettings:
         self._dirty = True
 
     def y_limits(self, n_units: int) -> tuple[float, float]:
-        row_max = (n_units - 1) * self.spacing
-        pad = max(0.5 * self.spacing, 0.25)
-        return -pad, row_max + pad
+        if n_units == 0:
+            return -0.5, 0.5
+        return -0.5, n_units - 0.5
 
     def draw_settings(self, name: str):
         meta_keys = [INDEX_LABEL] + self.metadata_keys
@@ -155,11 +153,6 @@ class UnitsSettings:
         imgui.set_next_item_width(-1)
         _, self.width = imgui.drag_float(
             f"##width_{name}", self.width, 0.05, 0.5, 4.0, "%.1f"
-        )
-        imgui.text("Unit spacing")
-        imgui.set_next_item_width(-1)
-        _, self.spacing = imgui.drag_float(
-            f"##spacing_{name}", self.spacing, 0.05, 0.1, 5.0, "%.1f"
         )
 
     def draw_plot(
@@ -225,7 +218,7 @@ def _draw_lines(
         for times, unit_ids in stream.iter_visible(chunks, t0, t1, width_px):
             for timestamp, uid in zip(times, unit_ids):
                 row_idx = settings.row_by_uid[int(uid)]
-                row = row_idx * settings.spacing
+                row = row_idx
                 p = implot.plot_to_pixels(timestamp, row)
                 draw_list.add_line(
                     imgui.ImVec2(p.x, p.y - half_height),

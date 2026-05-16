@@ -11,8 +11,8 @@ if __name__ == "__main__":
     units = Units(
         name="units",
         ts=units_grp["spike_times"],
-        values=units_grp["spike_units"],
-        metadata=metadata,
+        spike_units=units_grp["spike_units"],
+        unit_ids=metadata.get("unit_ids"),
     )
 
     run_viewer([(units, UnitsSettings(metadata=metadata))], title="Raster Viewer")

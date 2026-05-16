@@ -24,8 +24,8 @@ units_metadata = dict(root["units"].attrs)
 units = Units(
     name="units",
     ts=root["units/spike_times"],
-    values=root["units/spike_units"],
-    metadata=units_metadata,
+    spike_units=root["units/spike_units"],
+    unit_ids=units_metadata.get("unit_ids"),
 )
 
 run_viewer(
