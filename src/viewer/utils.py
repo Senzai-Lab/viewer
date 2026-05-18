@@ -45,6 +45,51 @@ def load_prb(ks_path: str | Path) -> dict[str, np.ndarray]:
     }
 
 
+def filter_units(
+    spike_times,
+    spike_units,
+    unit_ids,
+    output_path: str | Path,
+    *,
+    spike_times_filename: str = "spike_times.npy",
+    spike_units_filename: str = "spike_units.npy",
+    unit_ids_filename: str | None = "unit_ids.npy",
+) -> dict[str, object]:
+    # GPT5.5 made
+    # TODO: Verify
+    spike_times = np.asarray(spike_times)
+    spike_units = np.asarray(spike_units).reshape(-1)
+    unit_ids = np.asarray(unit_ids, dtype=np.int64).reshape(-1)
+
+    if len(spike_times) != len(spike_units):
+        raise ValueError("spike_times and spike_units must have the same length")
+
+    output_path = Path(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    keep = np.isin(spike_units, unit_ids)
+    spike_times_path = output_path / spike_times_filename
+    spike_units_path = output_path / spike_units_filename
+
+    np.save(spike_times_path, spike_times[keep])
+    np.save(spike_units_path, spike_units[keep])
+
+    paths: dict[str, Path] = {
+        "spike_times": spike_times_path,
+        "spike_units": spike_units_path,
+    }
+    if unit_ids_filename is not None:
+        unit_ids_path = output_path / unit_ids_filename
+        np.save(unit_ids_path, unit_ids)
+        paths["unit_ids"] = unit_ids_path
+
+    return {
+        "paths": paths,
+        "n_spikes": int(np.count_nonzero(keep)),
+        "n_units": int(len(unit_ids)),
+    }
+
+
 def load_probeinterface(
     path: str | Path,
     *,
