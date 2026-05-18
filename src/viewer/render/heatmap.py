@@ -5,7 +5,7 @@ import math
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from viewer.ui import draw_cursor
+from viewer.ui import draw_cursor, setup_time_axis
 
 
 def iter_heatmap_visible(stream, chunks, t0: float, t1: float):
@@ -106,6 +106,8 @@ class HeatmapSettings:
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
         overlays=(),
+        *,
+        time_axis: str = "clock",
     ):
         items = list(iter_heatmap_visible(stream, chunks, view_t0.value, view_t1.value))
         if items:
@@ -116,7 +118,7 @@ class HeatmapSettings:
         scale_min, scale_max = self._scale(items)
 
         if implot.begin_plot(f"{stream.name}", flags=implot.Flags_.no_legend):
-            implot.setup_axes("Time (s)", self.y_label, 0, 0)
+            setup_time_axis(self.y_label, time_axis=time_axis)
             implot.setup_axis_limits(
                 implot.ImAxis_.y1,
                 float(y_edges[0]),

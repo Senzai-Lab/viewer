@@ -5,7 +5,7 @@ from cmap import Colormap
 from imgui_bundle import imgui, implot
 
 from viewer.stream import Units
-from viewer.ui import draw_cursor
+from viewer.ui import draw_cursor, setup_time_axis
 
 INDEX_LABEL = "(index)"
 DEFAULT_CMAP = "cmocean:phase"
@@ -164,6 +164,8 @@ class UnitsSettings:
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
         overlays=(),
+        *,
+        time_axis: str = "clock",
     ):
         self._ensure_stream_units(stream)
         if self._dirty:
@@ -172,7 +174,7 @@ class UnitsSettings:
         y_min, y_max = self.y_limits(len(self.plot_unit_ids))
 
         if implot.begin_plot(f"{stream.name}"):
-            implot.setup_axes("Time (s)", "Unit", 0, 0)
+            setup_time_axis("Unit", time_axis=time_axis)
             implot.setup_axis_limits(implot.ImAxis_.y1, y_min, y_max, imgui.Cond_.always)
             implot.setup_axis_links(implot.ImAxis_.x1, view_t0, view_t1)
 

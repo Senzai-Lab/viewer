@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from viewer.ui import draw_cursor
+from viewer.ui import draw_cursor, setup_time_axis
 
 
 class EventBars:
@@ -40,6 +40,7 @@ class EventBars:
         height: float = 140.0,
         bar_height: float = 0.45,
         legend: bool = False,
+        time_axis: str = "clock",
     ):
         flags = (
             implot.Flags_.no_title
@@ -59,7 +60,7 @@ class EventBars:
         if not implot.begin_plot(name, imgui.ImVec2(-1.0, height), flags):
             return
 
-        implot.setup_axes("", "", x_flags, y_flags)
+        setup_time_axis("", time_axis=time_axis, x_label="", x_flags=x_flags, y_flags=y_flags)
         implot.setup_axis_limits(
             implot.ImAxis_.y1,
             -0.5,

@@ -5,7 +5,7 @@ from imgui_bundle import hello_imgui, imgui, immapp, implot
 from viewer.cache import ChunkCache
 from viewer.controller import TimeController
 from viewer.stream import Stream
-from viewer.ui import draw_stream_debug, gui_transport, setup_style
+from viewer.ui import TIME_AXIS_CLOCK, draw_stream_debug, gui_transport, setup_style
 
 
 class AppState:
@@ -26,6 +26,7 @@ class AppState:
         self.visible = {}
         self.event_bars = event_bars
         self.overlays = overlays
+        self.time_axis = TIME_AXIS_CLOCK
 
         for stream, settings in streams:
             self.cache.add(stream)
@@ -76,11 +77,20 @@ def gui_plot(state: AppState):
                     view_t0=view_t0,
                     view_t1=view_t1,
                     height=120.0,
+                    time_axis=state.time_axis,
                 )
             for name, stream in visible_streams:
                 chunks = cache.get_chunks(name, t)
                 settings = state.settings[name]
-                settings.draw_plot(stream, chunks, t, view_t0, view_t1, state.overlays)
+                settings.draw_plot(
+                    stream,
+                    chunks,
+                    t,
+                    view_t0,
+                    view_t1,
+                    state.overlays,
+                    time_axis=state.time_axis,
+                )
 
             implot.end_subplots()
 
@@ -123,8 +133,8 @@ def run_viewer(
     window_size: tuple[int, int] = (1480, 900),
     event_bars=None,
     overlays=(),
-    span: float = 5.0,
-    max_workers: int = 2,
+    span: float = 2.0,
+    max_workers: int = 3,
 ):
     state = AppState(
         streams,

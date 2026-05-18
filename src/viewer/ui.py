@@ -3,6 +3,13 @@ from imgui_bundle import imgui, implot, icons_fontawesome_4
 
 from .utils import format_bytes, format_seconds
 
+TIME_AXIS_CLOCK = "clock"
+TIME_AXIS_SECONDS = "seconds"
+TIME_AXIS_OPTIONS = [
+    (TIME_AXIS_CLOCK, "Clock"),
+    (TIME_AXIS_SECONDS, "Seconds"),
+]
+
 FA_PLAY = icons_fontawesome_4.ICON_FA_PLAY
 FA_PAUSE = icons_fontawesome_4.ICON_FA_PAUSE
 FA_BACKWARD = icons_fontawesome_4.ICON_FA_STEP_BACKWARD
@@ -69,6 +76,53 @@ def setup_style():
     style.set_color_(imgui.Col_.button_hovered, imgui.ImVec4(0.220, 0.250, 0.285, 1.0))
     style.set_color_(imgui.Col_.check_mark, imgui.ImVec4(0.400, 0.760, 0.950, 1.0))
     style.set_color_(imgui.Col_.slider_grab, imgui.ImVec4(0.400, 0.760, 0.950, 1.0))
+
+    plot_style = implot.get_style()
+    plot_style.use24_hour_clock = True
+    plot_style.use_iso8601 = False
+    plot_style.use_local_time = False
+
+
+def setup_time_axis(
+    y_label: str,
+    *,
+    time_axis: str = TIME_AXIS_CLOCK,
+    x_label: str | None = None,
+    x_flags=0,
+    y_flags=0,
+) -> None:
+    if x_label is None:
+        x_label = {
+            TIME_AXIS_CLOCK: "Time",
+            TIME_AXIS_SECONDS: "Time (s)",
+        }[time_axis]
+
+    implot.setup_axes(x_label, y_label, x_flags, y_flags)
+    scale = {
+        TIME_AXIS_CLOCK: implot.Scale_.time,
+        TIME_AXIS_SECONDS: implot.Scale_.linear,
+    }[time_axis]
+    implot.setup_axis_scale(implot.ImAxis_.x1, scale)
+
+
+def format_time_value(seconds: float, time_axis: str) -> str:
+    if time_axis == TIME_AXIS_CLOCK:
+        return _format_elapsed_clock(seconds)
+    if time_axis == TIME_AXIS_SECONDS:
+        return f"{seconds:.1f} s"
+    raise ValueError(f"Unknown time axis: {time_axis}")
+
+
+def _format_elapsed_clock(seconds: float) -> str:
+    sign = "-" if seconds < 0 else ""
+    total = int(round(abs(seconds)))
+    days, rem = divmod(total, 24 * 60 * 60)
+    hours, rem = divmod(rem, 60 * 60)
+    minutes, seconds = divmod(rem, 60)
+    text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    if days:
+        text = f"{days}d {text}"
+    return f"{sign}{text}"
 
 
 def draw_cursor(
@@ -155,6 +209,17 @@ def gui_transport(state):
         ctrl.playback_speed = new_speed
     imgui.same_line()
 
+    modes = [mode for mode, _ in TIME_AXIS_OPTIONS]
+    labels = [label for _, label in TIME_AXIS_OPTIONS]
+    current_idx = modes.index(state.time_axis)
+    imgui.set_next_item_width(95.0)
+    changed, new_idx = imgui.combo("##time_axis", current_idx, labels)
+    if imgui.is_item_hovered(imgui.HoveredFlags_.stationary):
+        imgui.set_tooltip("Time axis")
+    if changed:
+        state.time_axis = modes[new_idx]
+    imgui.same_line()
+
     # --- debug popup ---
     if imgui.button(FA_BUG):
         imgui.open_popup("debug_popup")
@@ -170,9 +235,13 @@ def gui_transport(state):
 
     # --- global scrub bar ---
     imgui.set_next_item_width(-1)
+    value_label = (
+        f"{format_time_value(ctrl.t_cursor, state.time_axis)}  /  "
+        f"{format_time_value(ctrl.t_max, state.time_axis)}"
+    )
     changed, new_t = imgui.slider_float(
         "##time", ctrl.t_cursor, ctrl.t_min, ctrl.t_max,
-        f"%.1f s  /  {ctrl.t_max:.1f} s",
+        value_label,
     )
     if changed:
         ctrl.jump_to(new_t)

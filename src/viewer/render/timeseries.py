@@ -4,7 +4,7 @@ import numpy as np
 from imgui_bundle import imgui, implot
 
 from viewer.stream import TimeSeries
-from viewer.ui import draw_cursor
+from viewer.ui import draw_cursor, setup_time_axis
 
 
 class TimeSeriesSettings:
@@ -47,11 +47,13 @@ class TimeSeriesSettings:
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
         overlays=(),
+        *,
+        time_axis: str = "clock",
     ):
         y_min, y_max = self.y_limits(stream.n_channels)
 
         if implot.begin_plot(f"{stream.name}"):
-            implot.setup_axes("Time (s)", "Value", 0, 0)
+            setup_time_axis("Value", time_axis=time_axis)
             implot.setup_axis_limits(implot.ImAxis_.y1, y_min, y_max, imgui.Cond_.once)
             implot.setup_axis_zoom_constraints(implot.ImAxis_.y1, 1e-6, 1e12)
             implot.setup_axis_links(implot.ImAxis_.x1, view_t0, view_t1)

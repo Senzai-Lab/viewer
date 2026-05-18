@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 from viewer import Ephys, EphysSettings, HeatmapSettings, run_viewer
-from viewer.utils import load_probeinterface
+from viewer.utils import env_path, load_probeinterface
 from viewer.transforms import Bandpass, Compose, FFT
 
 
@@ -25,7 +25,7 @@ def load_bin(filename: Path):
 
 
 if __name__ == "__main__":
-    data_path = Path("/Volumes/fsmresfiles/Basic_Sciences/Phys/SenzaiLab/pipeline_output/aa005/ProbeA")
+    data_path = env_path("VIEWER_EPHYS_DATA_PATH")
     geometry = load_probeinterface(data_path / "concat" / "probe.json")
     data = load_bin(data_path / "eeg.dat")
 
@@ -94,5 +94,5 @@ if __name__ == "__main__":
 
         ],
         title="Ephys FFT Heatmap",
-        span=8.0,
+        span=2.0,
     )

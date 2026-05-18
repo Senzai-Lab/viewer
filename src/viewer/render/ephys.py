@@ -5,6 +5,7 @@ from imgui_bundle import imgui, implot
 
 from . import probe
 from viewer.stream import Ephys
+from viewer.ui import setup_time_axis
 
 
 class EphysSettings:
@@ -73,13 +74,15 @@ class EphysSettings:
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
         overlays=(),
+        *,
+        time_axis: str = "clock",
     ):
         channel_indices = np.asarray(np.flatnonzero(self.probe.visible), dtype=np.intp)
         visible_count = int(len(channel_indices))
         y_limits = self.y_limits(channel_indices)
 
         if implot.begin_plot(f"{stream.name}", flags=implot.Flags_.no_legend):
-            implot.setup_axes("Time (s)", "Channel offset", 0, 0)
+            setup_time_axis("Channel offset", time_axis=time_axis)
             _setup_y_limits(self, y_limits)
             implot.setup_axis_zoom_constraints(implot.ImAxis_.y1, 1e-6, 1e12)
             implot.setup_axis_links(implot.ImAxis_.x1, view_t0, view_t1)

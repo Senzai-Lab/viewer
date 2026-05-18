@@ -13,6 +13,29 @@ SHANK_COLORS = {
 }
 
 
+def load_env(path: str | Path = ".env") -> dict[str, str]:
+    path = Path(path)
+    values = {}
+
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise ValueError(f"{path}:{lineno} is not KEY=VALUE")
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        values[key] = value
+
+    return values
+
+
+def env_path(key: str, env_file: str | Path = ".env") -> Path:
+    return Path(load_env(env_file)[key]).expanduser()
+
+
 def load_prb(ks_path: str | Path) -> dict[str, np.ndarray]:
     ks_path = Path(ks_path)
     ch_map = np.load(ks_path / "channel_map.npy").astype(np.uint16)
