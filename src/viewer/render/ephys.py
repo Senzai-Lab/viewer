@@ -36,7 +36,8 @@ class EphysSettings:
         pad = 1.0
         return float(ys.min() - pad), float(ys.max() + pad)
 
-    def draw_settings(self, name: str):
+    def draw_settings(self, stream: Ephys, cache):
+        name = stream.name
         imgui.text("Line width")
         imgui.set_next_item_width(-1)
         _, self.width = imgui.drag_float(
@@ -71,6 +72,7 @@ class EphysSettings:
         t: float,
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
+        overlays=(),
     ):
         channel_indices = np.asarray(np.flatnonzero(self.probe.visible), dtype=np.intp)
         visible_count = int(len(channel_indices))
@@ -101,6 +103,8 @@ class EphysSettings:
                     else:
                         _plot_envelope(item, self, channel_indices)
 
+            for overlay in overlays:
+                overlay.draw_overlay()
             implot.end_plot()
 
 
@@ -143,7 +147,7 @@ def _plot_raw(
     settings: EphysSettings,
     channel_indices: np.ndarray,
 ):
-    xstart = item["sample_start"] / stream.fs
+    xstart = item["t_start"]
     xscale = item["dt"]
     data = item["data"]
 

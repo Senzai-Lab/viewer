@@ -13,6 +13,8 @@ class AppState:
             self,
             streams: list[tuple[Stream, Any]],
             *,
+            event_bars=None,
+            overlays=(),
             span: float = 5.0,
             max_workers: int = 2,
     ):
@@ -22,6 +24,8 @@ class AppState:
         self.cache = ChunkCache(max_workers=max_workers)
         self.settings = {}
         self.visible = {}
+        self.event_bars = event_bars
+        self.overlays = overlays
 
         for stream, settings in streams:
             self.cache.add(stream)
@@ -56,21 +60,31 @@ def gui_plot(state: AppState):
         for name, stream in cache.streams.items()
         if state.visible[name]
     ]
-    if not visible_streams:
+    if not visible_streams and state.event_bars is None:
         return
 
-    rows = len(visible_streams)
-    size = imgui.ImVec2(-1, imgui.get_content_region_avail().y)
-    flags = (implot.SubplotFlags_.no_menus | implot.SubplotFlags_.no_title)
+    if visible_streams:
+        rows = len(visible_streams)
+        size = imgui.ImVec2(-1, imgui.get_content_region_avail().y)
+        flags = (implot.SubplotFlags_.no_title)
 
-    if implot.begin_subplots("##streams", rows, 1, size, flags):
-        for name, stream in visible_streams:
-            chunks = cache.get_chunks(name, t)
-            settings = state.settings[name]
-            settings.draw_plot(stream, chunks, t, view_t0, view_t1)
+        if implot.begin_subplots("##streams", rows, 1, size, flags):
+            if state.event_bars is not None:
+                state.event_bars.draw(
+                    "Event Bars##top_event_bars",
+                    t=t,
+                    view_t0=view_t0,
+                    view_t1=view_t1,
+                    height=120.0,
+                )
+            for name, stream in visible_streams:
+                chunks = cache.get_chunks(name, t)
+                settings = state.settings[name]
+                settings.draw_plot(stream, chunks, t, view_t0, view_t1, state.overlays)
 
-        implot.end_subplots()
-        ctrl.update_view(view_t0.value, view_t1.value)
+            implot.end_subplots()
+
+    ctrl.update_view(view_t0.value, view_t1.value)
 
     for name, stream in visible_streams:
         cache.prefetch(name, ctrl.t_cursor)
@@ -83,7 +97,21 @@ def gui_settings(state: AppState):
             draw_stream_debug(state.cache, stream, state.controller.t_cursor)
             settings = state.settings[name]
             if imgui.tree_node_ex(f"Settings##stream_settings_{name}"):
-                settings.draw_settings(name)
+                settings.draw_settings(stream, state.cache)
+                imgui.tree_pop()
+
+            transform = getattr(stream, "transform", None)
+            if transform is not None and imgui.tree_node_ex(f"Transform##transform_{name}"):
+                draw_settings = getattr(transform, "draw_settings", None)
+                if draw_settings is None:
+                    imgui.text_disabled("No transform settings")
+                else:
+                    changed = draw_settings(stream)
+                    if changed:
+                        setup_transform = getattr(stream, "setup_transform", None)
+                        if setup_transform is not None:
+                            setup_transform()
+                        state.cache.reset_stream(stream.name)
                 imgui.tree_pop()
 
 
@@ -92,12 +120,16 @@ def run_viewer(
     streams: list[tuple[Stream, Any]],
     *,
     title: str = 'Viewer',
-    window_size: tuple[int, int] = (1280, 720),
+    window_size: tuple[int, int] = (1480, 900),
+    event_bars=None,
+    overlays=(),
     span: float = 5.0,
     max_workers: int = 2,
 ):
     state = AppState(
         streams,
+        event_bars=event_bars,
+        overlays=overlays,
         span=span,
         max_workers=max_workers,
     )

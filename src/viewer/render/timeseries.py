@@ -24,7 +24,8 @@ class TimeSeriesSettings:
         pad = max(self.gain, 0.5 * self.spacing, 0.25)
         return -pad, row_max + pad
 
-    def draw_settings(self, name: str):
+    def draw_settings(self, stream: TimeSeries, cache):
+        name = stream.name
         imgui.set_next_item_width(-1)
         _, self.width = imgui.drag_float(
             f"##width_{name}", self.width, 0.05, 0.5, 3.0, "Line width: %.1f"
@@ -45,6 +46,7 @@ class TimeSeriesSettings:
         t: float,
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
+        overlays=(),
     ):
         y_min, y_max = self.y_limits(stream.n_channels)
 
@@ -76,5 +78,7 @@ class TimeSeriesSettings:
                         spec=imspec,
                     )
 
+            for overlay in overlays:
+                overlay.draw_overlay()
             draw_cursor(t)
             implot.end_plot()

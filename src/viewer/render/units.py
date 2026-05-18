@@ -110,7 +110,8 @@ class UnitsSettings:
             return -0.5, 0.5
         return -0.5, n_units - 0.5
 
-    def draw_settings(self, name: str):
+    def draw_settings(self, stream: Units, cache):
+        name = stream.name
         meta_keys = [INDEX_LABEL] + self.metadata_keys
 
         imgui.text("Sort by")
@@ -162,6 +163,7 @@ class UnitsSettings:
         t: float,
         view_t0: implot.BoxedValue,
         view_t1: implot.BoxedValue,
+        overlays=(),
     ):
         self._ensure_stream_units(stream)
         if self._dirty:
@@ -183,6 +185,8 @@ class UnitsSettings:
             width_px = max(1, int(implot.get_plot_size().x))
             _draw_lines(stream, chunks, self, t0, t1, width_px)
 
+            for overlay in overlays:
+                overlay.draw_overlay()
             draw_cursor(t)
             implot.end_plot()
 

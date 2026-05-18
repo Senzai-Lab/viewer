@@ -1,6 +1,6 @@
 import zarr
 
-from viewer import TimeSeries, TimeSeriesSettings, Units, UnitsSettings, run_viewer
+from viewer import EventBars, TimeSeries, TimeSeriesSettings, Units, UnitsSettings, run_viewer
 
 root = zarr.open("/Users/iii9781/viewer/scripts/exp1.zarr", mode="r")
 
@@ -28,11 +28,28 @@ units = Units(
     unit_ids=units_metadata.get("unit_ids"),
 )
 
+t0 = float(root["ephys/ts"][0])
+t1 = float(root["ephys/ts"][-1])
+step = (t1 - t0) / 6.0
+behavior = EventBars(
+    starts=[t0 + i * step for i in range(6)],
+    ends=[t0 + (i + 1) * step for i in range(6)],
+    labels=["quiet", "run", "groom", "quiet", "run", "rest"],
+    label_order=["quiet", "run", "groom", "rest"],
+    colors={
+        "quiet": "#6b8cff",
+        "run": "#47d18c",
+        "groom": "#f26d7d",
+        "rest": "#ffc857",
+    },
+)
+
 run_viewer(
     [
         (ephys, TimeSeriesSettings()),
         (pupil, TimeSeriesSettings()),
         (units, UnitsSettings(metadata=units_metadata)),
     ],
+    event_bars=behavior,
     span=5.0,
 )

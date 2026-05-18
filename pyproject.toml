@@ -17,6 +17,7 @@ dependencies = [
     "probeinterface>=0.3.2",
     "pynapple>=0.11.0",
     "requests>=2.33.1",
+    "scipy>=1.17.1",
     "zarr>=3.2.1",
 ]
 

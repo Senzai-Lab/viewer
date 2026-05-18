@@ -135,6 +135,18 @@ class ChunkCache:
         for wanted in self.desired.values():
             wanted.clear()
 
+    def reset_stream(self, stream_name: str):
+        for key in list(self.cache):
+            if key[0] == stream_name:
+                self.cache.pop(key)
+
+        for key, future in list(self.pending.items()):
+            if key[0] == stream_name:
+                future.cancel()
+                self.pending.pop(key)
+
+        self.desired.get(stream_name, set()).clear()
+
     def close(self):
         self.pool.shutdown(wait=False, cancel_futures=True)
         self.pending.clear()

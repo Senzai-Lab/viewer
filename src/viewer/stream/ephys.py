@@ -20,52 +20,155 @@ class Ephys:
         scale: float = 1.0,
         offset: float = 0.0,
         units: str = "a.u.",
+        transform=None,
     ):
         self.name = name
         self.values = values
         self.ts = None
+        self.transform = transform
 
-        self.fs = float(fs)
+        self.source_fs = float(fs)
+        self.fs = self.source_fs
         self.n_samples = values.shape[0]
-        self.n_channels = values.shape[1]
+        self.source_n_channels = values.shape[1]
+        self.n_channels = self.source_n_channels
         self.geometry = geometry
 
         self.t_min = 0.0
-        self.t_max = (self.n_samples - 1) / self.fs
+        self.t_max = (self.n_samples - 1) / self.source_fs
         self.duration = self.t_max - self.t_min
 
         if chunk_samples is None:
-            chunk_samples = int(5 * self.fs)
+            chunk_samples = int(5 * self.source_fs)
         self.chunk_samples = int(chunk_samples)
 
         self.n_chunks = -(-self.n_samples // self.chunk_samples)
         self.source_dtype = values.dtype
-        self.dtype = np.result_type(self.source_dtype, np.float32)
-        self.chunk_nbytes = self.chunk_samples * self.n_channels * self.dtype.itemsize
+        self.dtype = np.dtype(np.result_type(self.source_dtype, np.float32))
+        self.y = None
+        self.chunk_nbytes = 0
 
         self.scale = float(scale)
         self.offset = float(offset)
         self.units = units
+        self.setup_transform()
+
+    def setup_transform(self):
+        self.fs = self.source_fs
+        self.n_channels = self.source_n_channels
+        self.dtype = np.dtype(np.result_type(self.source_dtype, np.float32))
+        self.y = None
+        self.chunk_nbytes = (
+            self.chunk_samples * self.n_channels * np.dtype(self.dtype).itemsize
+        )
+
+        if self.transform is None:
+            return
+
+        setup = getattr(self.transform, "setup", None)
+        meta = setup(self) if setup is not None else {}
+        meta = {} if meta is None else meta
+
+        self.fs = float(meta.get("fs", self.fs))
+        self.n_channels = int(meta.get("n_channels", self.n_channels))
+        if "dtype" in meta:
+            self.dtype = np.dtype(meta["dtype"])
+        self.y = meta.get("y", self.y)
+
+        output_nbytes = getattr(self.transform, "output_nbytes", None)
+        if "chunk_nbytes" in meta:
+            self.chunk_nbytes = int(meta["chunk_nbytes"])
+        elif output_nbytes is not None:
+            self.chunk_nbytes = int(output_nbytes(self, self.chunk_samples))
+        else:
+            self.chunk_nbytes = (
+                self.chunk_samples * self.n_channels * np.dtype(self.dtype).itemsize
+            )
 
     def chunk_at(self, t: float) -> int:
-        sample_idx = math.floor(t * self.fs)
+        sample_idx = math.floor(t * self.source_fs)
         chunk_idx = sample_idx // self.chunk_samples
         return max(0, min(chunk_idx, self.n_chunks - 1))
 
     def load_chunk(self, chunk_idx: int) -> dict:
         start = chunk_idx * self.chunk_samples
         stop = min(start + self.chunk_samples, self.n_samples)
+        pad = 0
+        if self.transform is not None:
+            pad = math.ceil(float(getattr(self.transform, "pad_s", 0.0)) * self.source_fs)
+        read_start = max(0, start - pad)
+        read_stop = min(self.n_samples, stop + pad)
 
-        data = np.array(self.values[start:stop], dtype=self.dtype, copy=True, order="F")
+        data = np.array(self.values[read_start:read_stop], dtype=self.dtype, copy=True, order="F")
         data *= self.scale
         data += self.offset
 
+        if self.transform is not None:
+            ctx = {
+                "stream": self,
+                "source_fs": self.source_fs,
+                "source_t_min": self.t_min,
+                "request_start": start,
+                "request_stop": stop,
+                "read_start": read_start,
+                "read_stop": read_stop,
+            }
+            output = self.transform(data, ctx)
+            return self._chunk_from_transform(output, start, stop, read_start, read_stop)
+
         return {
+            "t_start": self.t_min + start / self.source_fs,
+            "t_stop": self.t_min + stop / self.source_fs,
             "sample_start": start,
             "sample_stop": stop,
+            "fs": self.source_fs,
+            "dt": 1.0 / self.source_fs,
             "n_bytes": data.nbytes,
             "data": data,
         }
+
+    def _chunk_from_transform(
+        self,
+        output,
+        start: int,
+        stop: int,
+        read_start: int,
+        read_stop: int,
+    ) -> dict:
+        if not isinstance(output, dict):
+            output = {"data": output}
+
+        data = output["data"]
+        if "sample_start" not in output:
+            i0 = start - read_start
+            i1 = i0 + (stop - start)
+            data = data[i0:i1]
+            output = {
+                **output,
+                "data": data,
+                "sample_start": start,
+                "sample_stop": stop,
+                "t_start": self.t_min + start / self.fs,
+                "t_stop": self.t_min + stop / self.fs,
+                "fs": self.fs,
+                "dt": 1.0 / self.fs,
+            }
+
+        payload = {
+            "data": output["data"],
+            "t_start": output["t_start"],
+            "t_stop": output["t_stop"],
+            "sample_start": output["sample_start"],
+            "sample_stop": output["sample_stop"],
+            "fs": output["fs"],
+            "dt": output["dt"],
+            "source_sample_start": read_start,
+            "source_sample_stop": read_stop,
+        }
+        if "y" in output:
+            payload["y"] = output["y"]
+        payload["n_bytes"] = output.get("n_bytes", payload["data"].nbytes)
+        return payload
 
     def iter_visible_channels(
         self,
@@ -80,7 +183,11 @@ class Ephys:
         """
         Yield raw samples or min/max envelopes for selected channels.
         """
-        samples_per_px = self.fs * (t1 - t0) / width_px
+        if not chunks:
+            return
+
+        fs = chunks[0]["fs"]
+        samples_per_px = fs * (t1 - t0) / width_px
 
         if samples_per_px <= envelope_threshold:
             yield from self._iter_raw(chunks, t0, t1)
@@ -97,11 +204,13 @@ class Ephys:
 
     def _iter_raw(self, chunks, t0: float, t1: float):
         for chunk in chunks:
-            chunk_start = chunk["sample_start"]
+            chunk_t0 = chunk["t_start"]
+            fs = chunk["fs"]
+            dt = chunk["dt"]
             n = chunk["data"].shape[0]
 
-            i0 = math.floor(t0 * self.fs) - chunk_start - 1
-            i1 = math.ceil(t1 * self.fs) - chunk_start + 2
+            i0 = math.floor((t0 - chunk_t0) * fs) - 1
+            i1 = math.ceil((t1 - chunk_t0) * fs) + 2
             i0 = max(0, i0)
             i1 = min(n, i1)
 
@@ -112,9 +221,10 @@ class Ephys:
             yield {
                 "mode": "raw",
                 "data": chunk["data"][i0:i1],
+                "t_start": chunk_t0 + i0 * dt,
                 "sample_start": sample_start,
                 "sample_stop": chunk["sample_start"] + i1,
-                "dt": 1.0 / self.fs,
+                "dt": dt,
             }
 
     def _iter_envelope(
@@ -125,8 +235,14 @@ class Ephys:
         channel_indices: np.ndarray,
         samples_per_bin: int,
     ):
-        visible_start = math.floor(t0 * self.fs)
-        visible_stop = math.ceil(t1 * self.fs) + 1
+        if not chunks:
+            return
+
+        fs = chunks[0]["fs"]
+        dt = chunks[0]["dt"]
+        t_origin = chunks[0]["t_start"] - chunks[0]["sample_start"] * dt
+        visible_start = math.floor((t0 - t_origin) * fs)
+        visible_stop = math.ceil((t1 - t_origin) * fs) + 1
 
         runs = []
         run_start = None
@@ -179,7 +295,7 @@ class Ephys:
             # next offset, so each output row is one envelope bin.
             y_min = np.minimum.reduceat(block, offsets, axis=0)
             y_max = np.maximum.reduceat(block, offsets, axis=0)
-            times = 0.5 * (starts + stops - 1) / self.fs
+            times = t_origin + 0.5 * (starts + stops - 1) * dt
 
             yield {
                 "mode": "envelope",

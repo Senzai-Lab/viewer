@@ -2467,6 +2467,7 @@ dependencies = [
     { name = "probeinterface" },
     { name = "pynapple" },
     { name = "requests" },
+    { name = "scipy" },
     { name = "zarr" },
 ]
 
@@ -2492,6 +2493,7 @@ requires-dist = [
     { name = "pynapple", specifier = ">=0.11.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
     { name = "requests", specifier = ">=2.33.1" },
+    { name = "scipy", specifier = ">=1.17.1" },
     { name = "zarr", specifier = ">=3.2.1" },
 ]
 provides-extras = ["test"]
