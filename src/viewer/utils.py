@@ -31,11 +31,6 @@ def load_env(path: str | Path = ".env") -> dict[str, str]:
 
     return values
 
-
-def env_path(key: str, env_file: str | Path = ".env") -> Path:
-    return Path(load_env(env_file)[key]).expanduser()
-
-
 def load_prb(ks_path: str | Path) -> dict[str, np.ndarray]:
     ks_path = Path(ks_path)
     ch_map = np.load(ks_path / "channel_map.npy").astype(np.uint16)

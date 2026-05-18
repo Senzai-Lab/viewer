@@ -2,8 +2,8 @@ from pathlib import Path
 
 import numpy as np
 
-from viewer import Ephys, EphysSettings, HeatmapSettings, run_viewer
-from viewer.utils import env_path, load_probeinterface
+from viewer import Ephys, EphysSettings, HeatmapSettings, Units, UnitsSettings, run_viewer
+from viewer.utils import load_env, load_probeinterface
 from viewer.transforms import Bandpass, Compose, FFT
 
 
@@ -24,74 +24,31 @@ def load_bin(filename: Path):
     )
 
 
+
 if __name__ == "__main__":
-    data_path = env_path("VIEWER_EPHYS_DATA_PATH")
+    data_path = Path(load_env()["EPHYS_DATA_PATH"])
     geometry = load_probeinterface(data_path / "concat" / "probe.json")
-    data = load_bin(data_path / "eeg.dat")
+    data = load_bin(data_path / "eeg" / "eeg.dat")
 
     fs = 1250.0
-    raw_stream = Ephys(
-        "raw eeg",
-        data,
-        geometry,
-        fs=fs,
-        chunk_samples=int(10 * fs),
-        units="uV",
-        scale=0.195,
-    )
-    fft_stream = Ephys(
-        "fft1",
-        data,
-        geometry,
-        fs=fs,
-        chunk_samples=int(10 * fs),
-        units="uV",
-        scale=0.195,
+    raw_stream = Ephys("Probe A", data, geometry, fs=fs, chunk_samples=int(10 * fs), units="uV", scale=0.195,) 
+    fft_stream = Ephys("fft1", data, geometry, fs=fs, chunk_samples=int(10 * fs), units="uV", scale=0.195,
         transform=Compose(
             Bandpass(1.0, 125.0),
-            FFT(
-                channel=12,
-                window_s=0.5,
-                step_s=0.025,
-                freq_min=1.0,
-                freq_max=100.0,
-                log_power=True,
+            FFT(channel=100, window_s=0.2, step_s=0.05, freq_min=1.0, freq_max=100.0, log_power=True,),
             ),
-        ),
     )
-    fft_stream2 = Ephys(
-        "fft2",
-        data,
-        geometry,
-        fs=fs,
-        chunk_samples=int(10 * fs),
-        units="uV",
-        scale=0.195,
-        transform=Compose(
-            Bandpass(1.0, 125.0),
-            FFT(
-                channel=2,
-                window_s=0.5,
-                step_s=0.025,
-                freq_min=1.0,
-                freq_max=100.0,
-                log_power=True,
-            ),
-        ),
-    )
+
+    units = Units(
+        "units",
+        ts=np.load(data_path / "kilosort" / "spike_times.npy"),
+        spike_units=np.load(data_path / "kilosort" / "spike_clusters.npy", mmap_mode="r"),)
 
     run_viewer(
         [
             (raw_stream, EphysSettings(geometry, gain=1 / 40)),
-            (
-                fft_stream,
-                HeatmapSettings(y_label="Frequency (Hz)", cmap="Viridis", auto_scale=True),
-            ),
-            (
-                fft_stream2,
-                HeatmapSettings(y_label="Frequency (Hz)", cmap="Viridis", auto_scale=True),
-            )
-
+            (fft_stream, HeatmapSettings(y_label="Frequency (Hz)", cmap="Viridis", auto_scale=True)),
+            (units, UnitsSettings(metadata={"unit_ids": np.unique(units.spike_units)})),
         ],
         title="Ephys FFT Heatmap",
         span=2.0,
