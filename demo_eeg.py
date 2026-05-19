@@ -1,5 +1,5 @@
-from viewer import Ephys, EphysSettings, run_viewer
-from viewer.utils import env_path, load_probeinterface
+from viewer import Ephys, EphysView, show
+from viewer.utils import load_env, load_probeinterface
 from pathlib import Path
 import numpy as np
 
@@ -20,9 +20,9 @@ def load_bin(filename: Path):
     )
 
 if __name__ == "__main__":
-    data_path = env_path("VIEWER_EPHYS_DATA_PATH")
+    data_path = Path(load_env()["EPHYS_DATA_PATH"])
     geometry = load_probeinterface(data_path / 'concat' / 'probe.json')
-    data = load_bin(data_path / 'eeg.dat')
+    data = load_bin(data_path / 'eeg' / 'eeg.dat')
 
     fs = 1250.0
     ephys = Ephys(
@@ -35,8 +35,8 @@ if __name__ == "__main__":
         scale=0.195,
     )
 
-    run_viewer(
-        [(ephys, EphysSettings(geometry, gain=1 / 40))],
+    show(
+        [(ephys, EphysView(geometry, gain=1 / 40))],
         title="eeg",
         span=1,
     )

@@ -5,8 +5,11 @@ from typing import Any
 
 import numpy as np
 
+from .base import chunks_in_span, read_key
+from viewer.span import Span
 
-class Units:
+
+class Spikes:
     """Irregular sampled spike times with per-spike unit labels."""
 
     def __init__(
@@ -76,7 +79,26 @@ class Units:
         idx = math.floor((t - self.t_min) / self.chunk_duration)
         return max(0, min(idx, self.n_chunks - 1))
 
-    def load_chunk(self, chunk_idx: int) -> dict:
+    @property
+    def span(self) -> Span:
+        return Span(self.t_min, self.t_max)
+
+    def chunks_in(self, span: Span) -> range:
+        return chunks_in_span(self, span)
+
+    def at(self, t: float) -> dict:
+        return self.read(self.chunk_at(t))
+
+    def in_span(self, span: Span) -> list[dict]:
+        return [self.read(i) for i in self.chunks_in(span)]
+
+    def __len__(self) -> int:
+        return self.n_chunks
+
+    def __getitem__(self, key: int | slice) -> dict | list[dict]:
+        return read_key(self, key)
+
+    def read(self, chunk_idx: int) -> dict:
         t0 = self.t_min + chunk_idx * self.chunk_duration
         t1 = t0 + self.chunk_duration
 
@@ -91,5 +113,5 @@ class Units:
             "t_stop": t1,
             "ts": times,
             "data": units,
-            "n_bytes": times.nbytes + units.nbytes,
+            "nbytes": times.nbytes + units.nbytes,
         }

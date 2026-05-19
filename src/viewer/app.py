@@ -2,7 +2,7 @@ from typing import Any
 
 from imgui_bundle import hello_imgui, imgui, immapp, implot
 
-from viewer.cache import ChunkCache
+from viewer.cache import Cache
 from viewer.controller import TimeController
 from viewer.stream import Stream
 from viewer.ui import TIME_AXIS_CLOCK, draw_stream_debug, gui_transport, setup_style
@@ -19,19 +19,19 @@ class AppState:
             max_workers: int = 2,
     ):
         if not streams:
-            raise ValueError("run_viewer needs at least one stream")
+            raise ValueError("show needs at least one stream")
 
-        self.cache = ChunkCache(max_workers=max_workers)
-        self.settings = {}
+        self.cache = Cache(workers=max_workers)
+        self.views = {}
         self.visible = {}
         self.event_bars = event_bars
         self.overlays = overlays
         self.time_axis = TIME_AXIS_CLOCK
 
-        for stream, settings in streams:
+        for stream, view in streams:
             self.cache.add(stream)
             self.visible[stream.name] = True
-            self.settings[stream.name] = settings
+            self.views[stream.name] = view
 
         t_min = min(stream.t_min for stream, _ in streams)
         t_max = max(stream.t_max for stream, _ in streams)
@@ -39,7 +39,7 @@ class AppState:
 
     def reset(self):
         self.controller.reset()
-        self.cache.reset()
+        self.cache.drop()
 
     def close(self):
         self.cache.close()
@@ -80,9 +80,9 @@ def gui_plot(state: AppState):
                     time_axis=state.time_axis,
                 )
             for name, stream in visible_streams:
-                chunks = cache.get_chunks(name, t)
-                settings = state.settings[name]
-                settings.draw_plot(
+                chunks = cache.chunks(stream, t)
+                view = state.views[name]
+                view.draw_plot(
                     stream,
                     chunks,
                     t,
@@ -97,7 +97,7 @@ def gui_plot(state: AppState):
     ctrl.update_view(view_t0.value, view_t1.value)
 
     for name, stream in visible_streams:
-        cache.prefetch(name, ctrl.t_cursor)
+        cache.request(stream, ctrl.t_cursor)
 
 
 def gui_settings(state: AppState):
@@ -105,28 +105,26 @@ def gui_settings(state: AppState):
         if imgui.collapsing_header(f"{name}##settings"):
             _, state.visible[name] = imgui.checkbox(f"Visible##{name}", state.visible[name])
             draw_stream_debug(state.cache, stream, state.controller.t_cursor)
-            settings = state.settings[name]
+            view = state.views[name]
             if imgui.tree_node_ex(f"Settings##stream_settings_{name}"):
-                settings.draw_settings(stream, state.cache)
+                view.draw_settings(stream, state.cache)
                 imgui.tree_pop()
 
-            transform = getattr(stream, "transform", None)
-            if transform is not None and imgui.tree_node_ex(f"Transform##transform_{name}"):
-                draw_settings = getattr(transform, "draw_settings", None)
+            pipe = getattr(stream, "transforms", None)
+            if pipe is not None and imgui.tree_node_ex(f"Pipe##pipe_{name}"):
+                draw_settings = getattr(pipe, "draw_settings", None)
                 if draw_settings is None:
-                    imgui.text_disabled("No transform settings")
+                    imgui.text_disabled("No pipe settings")
                 else:
                     changed = draw_settings(stream)
                     if changed:
-                        setup_transform = getattr(stream, "setup_transform", None)
-                        if setup_transform is not None:
-                            setup_transform()
-                        state.cache.reset_stream(stream.name)
+                        stream.setup_pipe()
+                        state.cache.drop(stream)
                 imgui.tree_pop()
 
 
 
-def run_viewer(
+def show(
     streams: list[tuple[Stream, Any]],
     *,
     title: str = 'Viewer',

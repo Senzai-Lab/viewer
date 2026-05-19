@@ -5,6 +5,9 @@ from typing import Any
 
 import numpy as np
 
+from .base import chunks_in_span, read_key
+from viewer.span import Span
+
 
 class TimeSeries:
     """Continuous signal: (n_samples, n_channels) values array and timestamps."""
@@ -17,12 +20,12 @@ class TimeSeries:
             fs: float,
             *,
             chunk_samples: int,
-            transform=None,
     ):
         self.name = name
         self.values = values
         self.ts = ts
-        self.transform = transform
+        self.source = self
+        self.transforms = None
 
         self.source_fs = float(fs)
         self.fs = self.source_fs
@@ -42,9 +45,28 @@ class TimeSeries:
         self.n_chunks = -(-self.n_samples // self.chunk_samples)
 
         self.chunk_nbytes = 0
-        self.setup_transform()
+        self.setup_pipe()
 
-    def setup_transform(self):
+    def pipe(self, *transforms, name: str) -> "TimeSeries":
+        from viewer.transforms import Compose
+
+        stream = TimeSeries(
+            name,
+            self.values,
+            self.ts,
+            self.source_fs,
+            chunk_samples=self.chunk_samples,
+        )
+        stream.source = self.source
+        stream.transforms = (
+            Compose(*transforms)
+            if self.transforms is None
+            else Compose(self.transforms, *transforms)
+        )
+        stream.setup_pipe()
+        return stream
+
+    def setup_pipe(self):
         self.fs = self.source_fs
         self.n_channels = self.source_n_channels
         self.dtype = self.source_dtype
@@ -53,10 +75,10 @@ class TimeSeries:
             self.chunk_samples * self.n_channels * np.dtype(self.dtype).itemsize
         )
 
-        if self.transform is None:
+        if self.transforms is None:
             return
 
-        setup = getattr(self.transform, "setup", None)
+        setup = getattr(self.transforms, "setup", None)
         meta = setup(self) if setup is not None else {}
         meta = {} if meta is None else meta
 
@@ -68,7 +90,7 @@ class TimeSeries:
             self.dtype = np.dtype(np.result_type(self.source_dtype, np.float32))
         self.y = meta.get("y", self.y)
 
-        output_nbytes = getattr(self.transform, "output_nbytes", None)
+        output_nbytes = getattr(self.transforms, "output_nbytes", None)
         if "chunk_nbytes" in meta:
             self.chunk_nbytes = int(meta["chunk_nbytes"])
         elif output_nbytes is not None:
@@ -110,23 +132,42 @@ class TimeSeries:
         chunk_idx = sample_idx // self.chunk_samples
         return max(0, min(chunk_idx, self.n_chunks - 1))
 
-    def load_chunk(self, chunk_idx: int) -> dict:
+    @property
+    def span(self) -> Span:
+        return Span(self.t_min, self.t_max)
+
+    def chunks_in(self, span: Span) -> range:
+        return chunks_in_span(self, span)
+
+    def at(self, t: float) -> dict:
+        return self.read(self.chunk_at(t))
+
+    def in_span(self, span: Span) -> list[dict]:
+        return [self.read(i) for i in self.chunks_in(span)]
+
+    def __len__(self) -> int:
+        return self.n_chunks
+
+    def __getitem__(self, key: int | slice) -> dict | list[dict]:
+        return read_key(self, key)
+
+    def read(self, chunk_idx: int) -> dict:
         start = chunk_idx * self.chunk_samples
         stop = min(start + self.chunk_samples, self.n_samples)
         pad = 0
-        if self.transform is not None:
-            pad = math.ceil(float(getattr(self.transform, "pad_s", 0.0)) * self.source_fs)
+        if self.transforms is not None:
+            pad = math.ceil(float(getattr(self.transforms, "pad_s", 0.0)) * self.source_fs)
         read_start = max(0, start - pad)
         read_stop = min(self.n_samples, stop + pad)
 
-        if self.transform is None:
+        if self.transforms is None:
             data = np.asarray(self.values[start:stop])
         else:
             data = np.array(self.values[read_start:read_stop], dtype=self.dtype, copy=True)
         if data.ndim == 1:
             data = data[:, np.newaxis]
 
-        if self.transform is not None:
+        if self.transforms is not None:
             ctx = {
                 "stream": self,
                 "source_fs": self.source_fs,
@@ -136,7 +177,7 @@ class TimeSeries:
                 "read_start": read_start,
                 "read_stop": read_stop,
             }
-            output = self.transform(data, ctx)
+            output = self.transforms(data, ctx)
             return self._chunk_from_transform(output, start, stop, read_start, read_stop)
 
         return {
@@ -146,7 +187,7 @@ class TimeSeries:
             "sample_stop": stop,
             "fs": self.source_fs,
             "dt": 1.0 / self.source_fs,
-            "n_bytes": data.nbytes,
+            "nbytes": data.nbytes,
             "data": data,
         }
 
@@ -190,5 +231,5 @@ class TimeSeries:
         }
         if "y" in output:
             payload["y"] = output["y"]
-        payload["n_bytes"] = output.get("n_bytes", payload["data"].nbytes)
+        payload["nbytes"] = output.get("nbytes", payload["data"].nbytes)
         return payload

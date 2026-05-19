@@ -285,7 +285,7 @@ class FFT:
                 "fs": 1.0 / dt,
                 "dt": dt,
                 "y": y,
-                "n_bytes": empty.nbytes + y.nbytes,
+                "nbytes": empty.nbytes + y.nbytes,
             }
 
         signal = np.asarray(data[:, self.channel], dtype=np.float32)
@@ -319,7 +319,7 @@ class FFT:
             "fs": 1.0 / dt,
             "dt": dt,
             "y": y,
-            "n_bytes": values.nbytes + y.nbytes,
+            "nbytes": values.nbytes + y.nbytes,
         }
 
     def draw_settings(self, stream) -> bool:

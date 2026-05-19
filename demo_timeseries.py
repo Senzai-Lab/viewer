@@ -1,6 +1,6 @@
 import zarr
 
-from viewer import TimeSeries, TimeSeriesSettings, run_viewer
+from viewer import TimeSeries, TraceView, show
 
 
 if __name__ == "__main__":
@@ -24,7 +24,7 @@ if __name__ == "__main__":
         chunk_samples=pupil_grp["values"].chunks[0],
     )
 
-    run_viewer([
-        (ephys, TimeSeriesSettings()),
-        (pupil, TimeSeriesSettings()),
+    show([
+        (ephys, TraceView()),
+        (pupil, TraceView()),
     ])

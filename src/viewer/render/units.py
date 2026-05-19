@@ -4,14 +4,14 @@ import numpy as np
 from cmap import Colormap
 from imgui_bundle import imgui, implot
 
-from viewer.stream import Units
+from viewer.stream import Spikes
 from viewer.ui import draw_cursor, setup_time_axis
 
 INDEX_LABEL = "(index)"
 DEFAULT_CMAP = "cmocean:phase"
 
 
-class UnitsSettings:
+class RasterView:
     def __init__(
         self,
         metadata: dict | None = None,
@@ -96,7 +96,7 @@ class UnitsSettings:
         self.colors_u32 = [_rgba_u32(color) for color in rgba]
         self._dirty = False
 
-    def _ensure_stream_units(self, stream: Units):
+    def _ensure_stream_units(self, stream: Spikes):
         if len(self.unit_ids):
             return
         self.unit_ids = np.asarray(stream.unit_ids)
@@ -110,7 +110,7 @@ class UnitsSettings:
             return -0.5, 0.5
         return -0.5, n_units - 0.5
 
-    def draw_settings(self, stream: Units, cache):
+    def draw_settings(self, stream: Spikes, cache):
         name = stream.name
         meta_keys = [INDEX_LABEL] + self.metadata_keys
 
@@ -158,7 +158,7 @@ class UnitsSettings:
 
     def draw_plot(
         self,
-        stream: Units,
+        stream: Spikes,
         chunks: list[dict],
         t: float,
         view_t0: implot.BoxedValue,
@@ -209,9 +209,9 @@ def _rgba_u32(rgba: np.ndarray) -> int:
 
 
 def _draw_lines(
-    stream: Units,
+    stream: Spikes,
     chunks: list[dict],
-    settings: UnitsSettings,
+    settings: RasterView,
     t0: float,
     t1: float,
     width_px: int,

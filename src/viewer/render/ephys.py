@@ -8,7 +8,7 @@ from viewer.stream import Ephys
 from viewer.ui import setup_time_axis
 
 
-class EphysSettings:
+class EphysView:
     def __init__(
         self,
         geometry: dict | Ephys,
@@ -111,7 +111,7 @@ class EphysSettings:
             implot.end_plot()
 
 
-def _setup_y_limits(settings: EphysSettings, y_limits: tuple[float, float]):
+def _setup_y_limits(settings: EphysView, y_limits: tuple[float, float]):
     cond = imgui.Cond_.once
     if settings._last_y_limits != y_limits:
         cond = imgui.Cond_.always
@@ -134,7 +134,7 @@ def _iter_plot_channels(channel_indices: np.ndarray, hovered_idx: int):
         yield hovered_item
 
 
-def _trace_line_weight(settings: EphysSettings, highlighted: bool) -> float:
+def _trace_line_weight(settings: EphysView, highlighted: bool) -> float:
     if highlighted:
         return max(1.0, settings.width + 1.5)
     return settings.width
@@ -147,7 +147,7 @@ def _trace_brighten(highlighted: bool) -> float:
 def _plot_raw(
     stream: Ephys,
     item: dict,
-    settings: EphysSettings,
+    settings: EphysView,
     channel_indices: np.ndarray,
 ):
     xstart = item["t_start"]
@@ -177,7 +177,7 @@ def _plot_raw(
 
 def _plot_envelope(
     item: dict,
-    settings: EphysSettings,
+    settings: EphysView,
     channel_indices: np.ndarray,
 ):
     xs = np.ascontiguousarray(item["t"])

@@ -157,13 +157,13 @@ def draw_cursor(
 
 def draw_stream_debug(cache, stream, t: float):
     current = stream.chunk_at(t)
-    cached = cache.cached_indices(stream.name)
-    pending = cache.pending_indices(stream.name)
-    desired = cache.desired_indices(stream.name)
+    cached = cache.cached_indices(stream)
+    pending = cache.pending_indices(stream)
+    wanted = cache.wanted_indices(stream)
 
     imgui.text_disabled(
         f"chunk {current + 1}/{stream.n_chunks} | "
-        f"{format_bytes(cache.cached_bytes(stream.name))} cached"
+        f"{format_bytes(cache.cached_nbytes(stream))} cached"
     )
     _draw_chunk_boxes(stream.name, current, cached, pending)
     imgui.text_disabled(f"Time range: {stream.t_min:.3f} - {stream.t_max:.3f} s")
@@ -171,7 +171,7 @@ def draw_stream_debug(cache, stream, t: float):
     imgui.text_disabled(f"Chunk size: {format_bytes(stream.chunk_nbytes)}")
 
     if imgui.tree_node(f"Debug##debug_{stream.name}"):
-        imgui.text(f"Desired chunks: {fmt_indices(desired)}")
+        imgui.text(f"Wanted chunks: {fmt_indices(wanted)}")
         imgui.text(f"Loaded chunks: {fmt_indices(cached)}")
         imgui.text(f"Pending chunks: {fmt_indices(pending)}")
         imgui.tree_pop()
@@ -225,8 +225,8 @@ def gui_transport(state):
         imgui.open_popup("debug_popup")
     if imgui.begin_popup("debug_popup"):
         cache = state.cache
-        imgui.text(f"Cache: {format_bytes(cache.used_bytes)} / {format_bytes(cache.max_budget)}")
-        imgui.progress_bar(cache.used_bytes / max(cache.max_budget, 1), imgui.ImVec2(200, 0))
+        imgui.text(f"Cache: {format_bytes(cache.nbytes)} / {format_bytes(cache.max_nbytes)}")
+        imgui.progress_bar(cache.nbytes / max(cache.max_nbytes, 1), imgui.ImVec2(200, 0))
         imgui.separator()
         imgui.text(f"Pending: {len(cache.pending)}")
         imgui.text(f"Cached chunks: {len(cache.cache)}")

@@ -1,15 +1,15 @@
 from .event_bars import EventBars
-from .ephys import EphysSettings
-from .heatmap import HeatmapSettings
+from .ephys import EphysView
+from .heatmap import HeatmapView
 from .probe import ProbeSettings
-from .timeseries import TimeSeriesSettings
-from .units import UnitsSettings
+from .timeseries import TraceView
+from .units import RasterView
 
 __all__ = [
     "EventBars",
-    "EphysSettings",
-    "HeatmapSettings",
+    "EphysView",
+    "HeatmapView",
     "ProbeSettings",
-    "TimeSeriesSettings",
-    "UnitsSettings",
+    "RasterView",
+    "TraceView",
 ]
