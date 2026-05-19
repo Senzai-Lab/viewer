@@ -31,6 +31,21 @@ def load_env(path: str | Path = ".env") -> dict[str, str]:
 
     return values
 
+def load_bin(filename: Path) -> np.memmap:
+    dtype = np.dtype("int16")
+    n_channels = 384
+    n_values = filename.stat().st_size // dtype.itemsize
+    assert n_values % n_channels == 0
+
+    n_samples = n_values // n_channels
+    return np.memmap(
+        filename=filename,
+        dtype=dtype,
+        mode="r",
+        shape=(n_samples, n_channels),
+        order="C",
+    )
+
 def load_prb(ks_path: str | Path) -> dict[str, np.ndarray]:
     ks_path = Path(ks_path)
     ch_map = np.load(ks_path / "channel_map.npy").astype(np.uint16)
