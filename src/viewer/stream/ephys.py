@@ -5,11 +5,10 @@ from typing import Any
 import math
 import numpy as np
 
-from .base import chunks_in_span, read_key
-from viewer.span import Span
+from .base import BaseStream
 
 
-class Ephys:
+class Ephys(BaseStream):
     """Sample-clocked high-density electrophysiology data with probe geometry."""
 
     def __init__(
@@ -90,24 +89,18 @@ class Ephys:
         if self.transforms is None:
             return
 
-        setup = getattr(self.transforms, "setup", None)
-        meta = setup(self) if setup is not None else {}
-        meta = {} if meta is None else meta
+        meta = self.transforms.setup(self)
 
         self.fs = float(meta.get("fs", self.fs))
         self.n_channels = int(meta.get("n_channels", self.n_channels))
-        if "dtype" in meta:
-            self.dtype = np.dtype(meta["dtype"])
+        self.dtype = np.dtype(meta["dtype"])
         self.y = meta.get("y", self.y)
 
-        output_nbytes = getattr(self.transforms, "output_nbytes", None)
         if "chunk_nbytes" in meta:
             self.chunk_nbytes = int(meta["chunk_nbytes"])
-        elif output_nbytes is not None:
-            self.chunk_nbytes = int(output_nbytes(self, self.chunk_samples))
         else:
-            self.chunk_nbytes = (
-                self.chunk_samples * self.n_channels * np.dtype(self.dtype).itemsize
+            self.chunk_nbytes = int(
+                self.transforms.output_nbytes(self, self.chunk_samples)
             )
 
     def chunk_at(self, t: float) -> int:
@@ -115,31 +108,12 @@ class Ephys:
         chunk_idx = sample_idx // self.chunk_samples
         return max(0, min(chunk_idx, self.n_chunks - 1))
 
-    @property
-    def span(self) -> Span:
-        return Span(self.t_min, self.t_max)
-
-    def chunks_in(self, span: Span) -> range:
-        return chunks_in_span(self, span)
-
-    def at(self, t: float) -> dict:
-        return self.read(self.chunk_at(t))
-
-    def in_span(self, span: Span) -> list[dict]:
-        return [self.read(i) for i in self.chunks_in(span)]
-
-    def __len__(self) -> int:
-        return self.n_chunks
-
-    def __getitem__(self, key: int | slice) -> dict | list[dict]:
-        return read_key(self, key)
-
     def read(self, chunk_idx: int) -> dict:
         start = chunk_idx * self.chunk_samples
         stop = min(start + self.chunk_samples, self.n_samples)
         pad = 0
         if self.transforms is not None:
-            pad = math.ceil(float(getattr(self.transforms, "pad_s", 0.0)) * self.source_fs)
+            pad = math.ceil(float(self.transforms.pad_s) * self.source_fs)
         read_start = max(0, start - pad)
         read_stop = min(self.n_samples, stop + pad)
 
@@ -179,16 +153,12 @@ class Ephys:
         read_start: int,
         read_stop: int,
     ) -> dict:
-        if not isinstance(output, dict):
-            output = {"data": output}
-
         data = output["data"]
         if "sample_start" not in output:
             i0 = start - read_start
             i1 = i0 + (stop - start)
             data = data[i0:i1]
-            output = {
-                **output,
+            return {
                 "data": data,
                 "sample_start": start,
                 "sample_stop": stop,
@@ -196,6 +166,9 @@ class Ephys:
                 "t_stop": self.t_min + stop / self.fs,
                 "fs": self.fs,
                 "dt": 1.0 / self.fs,
+                "source_sample_start": read_start,
+                "source_sample_stop": read_stop,
+                "nbytes": data.nbytes,
             }
 
         payload = {
@@ -211,7 +184,7 @@ class Ephys:
         }
         if "y" in output:
             payload["y"] = output["y"]
-        payload["nbytes"] = output.get("nbytes", payload["data"].nbytes)
+        payload["nbytes"] = output["nbytes"]
         return payload
 
     def iter_visible_channels(

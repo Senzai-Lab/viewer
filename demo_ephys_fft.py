@@ -30,7 +30,7 @@ if __name__ == "__main__":
     data_path = Path(load_env()["EPHYS_DATA_PATH"])
     geometry = load_probeinterface(data_path / "concat" / "probe.json")
     data = load_bin(data_path / "eeg" / "eeg.dat")
-    units_metadata = pd.read_csv("./scripts/units.csv").to_dict()
+    # units_metadata = pd.read_csv("./scripts/units.csv").to_dict()
 
     fs = 1250.0
     
@@ -56,17 +56,17 @@ if __name__ == "__main__":
         name="fft1",
     )
 
-    spikes = Spikes(
-        "units",
-        ts=np.load("spike_times.npy"),
-        spike_units=np.load("spike_units.npy", mmap_mode="r"),
-        unit_ids=units_metadata['unit_ids'],)
+    # spikes = Spikes(
+    #     "units",
+    #     ts=np.load("spike_times.npy"),
+    #     spike_units=np.load("spike_units.npy", mmap_mode="r"),
+    #     unit_ids=units_metadata['unit_ids'],)
 
     show(
         [
-            (raw_stream, EphysView(geometry, gain=1 / 40)),
+            (raw_stream, EphysView(gain=1 / 40)),
             (fft_stream, HeatmapView(y_label="Frequency (Hz)", cmap="Viridis", auto_scale=True)),
-            (spikes, RasterView(metadata=units_metadata, sort_by='unit_display_y')),
+            # (spikes, RasterView(metadata=units_metadata, sort_by='unit_display_y')),
         ],
         title="Ephys FFT Heatmap",
         span=2.0,

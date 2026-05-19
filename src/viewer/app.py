@@ -110,16 +110,12 @@ def gui_settings(state: AppState):
                 view.draw_settings(stream, state.cache)
                 imgui.tree_pop()
 
-            pipe = getattr(stream, "transforms", None)
+            pipe = stream.transforms
             if pipe is not None and imgui.tree_node_ex(f"Pipe##pipe_{name}"):
-                draw_settings = getattr(pipe, "draw_settings", None)
-                if draw_settings is None:
-                    imgui.text_disabled("No pipe settings")
-                else:
-                    changed = draw_settings(stream)
-                    if changed:
-                        stream.setup_pipe()
-                        state.cache.drop(stream)
+                changed = pipe.draw_settings(stream)
+                if changed:
+                    stream.setup_pipe()
+                    state.cache.drop(stream)
                 imgui.tree_pop()
 
 

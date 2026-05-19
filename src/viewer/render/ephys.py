@@ -11,7 +11,6 @@ from viewer.ui import setup_time_axis
 class EphysView:
     def __init__(
         self,
-        geometry: dict | Ephys,
         *,
         width: float = 1.0,
         gain: float = 1.0,
@@ -21,24 +20,33 @@ class EphysView:
         self.width = width
         self.gain = gain
         self.envelope_threshold = envelope_threshold
-        if isinstance(geometry, Ephys):
-            geometry = geometry.geometry
-        self.probe = probe.ProbeSettings(
-            geometry,
-            plot_shank_gap=plot_shank_gap,
-        )
+        self.plot_shank_gap = plot_shank_gap
+        self.probe: probe.ProbeSettings | None = None
         self._last_y_limits: tuple[float, float] | None = None
 
-    def y_limits(self, channel_indices: np.ndarray) -> tuple[float, float]:
+    def _ensure_probe(self, stream: Ephys) -> probe.ProbeSettings:
+        if self.probe is None:
+            self.probe = probe.ProbeSettings(
+                stream.geometry,
+                plot_shank_gap=self.plot_shank_gap,
+            )
+        return self.probe
+
+    def y_limits(
+        self,
+        probe_settings: probe.ProbeSettings,
+        channel_indices: np.ndarray,
+    ) -> tuple[float, float]:
         if len(channel_indices) == 0:
             return -1.0, 1.0
 
-        ys = self.probe.plot_y[channel_indices]
+        ys = probe_settings.plot_y[channel_indices]
         pad = 1.0
         return float(ys.min() - pad), float(ys.max() + pad)
 
     def draw_settings(self, stream: Ephys, cache):
         name = stream.name
+        probe_settings = self._ensure_probe(stream)
         imgui.text("Line width")
         imgui.set_next_item_width(-1)
         _, self.width = imgui.drag_float(
@@ -52,19 +60,19 @@ class EphysView:
 
         imgui.separator()
         if imgui.button(f"All##probe_all_{name}"):
-            self.probe.visible[:] = True
+            probe_settings.visible[:] = True
         imgui.same_line()
         if imgui.button(f"None##probe_none_{name}"):
-            self.probe.visible[:] = False
+            probe_settings.visible[:] = False
 
-        for shank in self.probe.shanks:
+        for shank in probe_settings.shanks:
             imgui.same_line()
             if imgui.button(f"S{int(shank)}##probe_shank_{name}_{int(shank)}"):
-                self.probe.toggle_shank(int(shank))
+                probe_settings.toggle_shank(int(shank))
 
-        visible_count = int(np.count_nonzero(self.probe.visible))
-        imgui.text_disabled(f"{visible_count} / {self.probe.n_channels} channels")
-        probe.draw_widget(name, self.probe)
+        visible_count = int(np.count_nonzero(probe_settings.visible))
+        imgui.text_disabled(f"{visible_count} / {probe_settings.n_channels} channels")
+        probe.draw_widget(name, probe_settings)
 
     def draw_plot(
         self,
@@ -77,9 +85,13 @@ class EphysView:
         *,
         time_axis: str = "clock",
     ):
-        channel_indices = np.asarray(np.flatnonzero(self.probe.visible), dtype=np.intp)
+        probe_settings = self._ensure_probe(stream)
+        channel_indices = np.asarray(
+            np.flatnonzero(probe_settings.visible),
+            dtype=np.intp,
+        )
         visible_count = int(len(channel_indices))
-        y_limits = self.y_limits(channel_indices)
+        y_limits = self.y_limits(probe_settings, channel_indices)
 
         if implot.begin_plot(f"{stream.name}", flags=implot.Flags_.no_legend):
             setup_time_axis("Channel offset", time_axis=time_axis)
@@ -102,9 +114,9 @@ class EphysView:
                     envelope_threshold=self.envelope_threshold,
                 ):
                     if item["mode"] == "raw":
-                        _plot_raw(stream, item, self, channel_indices)
+                        _plot_raw(stream, item, self, probe_settings, channel_indices)
                     else:
-                        _plot_envelope(item, self, channel_indices)
+                        _plot_envelope(item, self, probe_settings, channel_indices)
 
             for overlay in overlays:
                 overlay.draw_overlay()
@@ -148,6 +160,7 @@ def _plot_raw(
     stream: Ephys,
     item: dict,
     settings: EphysView,
+    probe_settings: probe.ProbeSettings,
     channel_indices: np.ndarray,
 ):
     xstart = item["t_start"]
@@ -156,16 +169,16 @@ def _plot_raw(
 
     for _, ch_idx, highlighted in _iter_plot_channels(
         channel_indices,
-        settings.probe.hovered_idx,
+        probe_settings.hovered_idx,
     ):
-        baseline = settings.probe.plot_y[ch_idx]
+        baseline = probe_settings.plot_y[ch_idx]
         ys = np.ascontiguousarray(data[:, ch_idx] * settings.gain + baseline)
         spec = implot.Spec(line_weight=_trace_line_weight(settings, highlighted))
-        spec.line_color = settings.probe.channel_color_vec(
+        spec.line_color = probe_settings.channel_color_vec(
             ch_idx,
             brighten=_trace_brighten(highlighted),
         )
-        label = settings.probe.channel_label(ch_idx)
+        label = probe_settings.channel_label(ch_idx)
         implot.plot_line(
             f"{label}##raw_{stream.name}_{ch_idx}",
             ys,
@@ -178,6 +191,7 @@ def _plot_raw(
 def _plot_envelope(
     item: dict,
     settings: EphysView,
+    probe_settings: probe.ProbeSettings,
     channel_indices: np.ndarray,
 ):
     xs = np.ascontiguousarray(item["t"])
@@ -187,16 +201,16 @@ def _plot_envelope(
     try:
         for col, ch_idx, highlighted in _iter_plot_channels(
             channel_indices,
-            settings.probe.hovered_idx,
+            probe_settings.hovered_idx,
         ):
-            baseline = settings.probe.plot_y[ch_idx]
+            baseline = probe_settings.plot_y[ch_idx]
             lo = np.ascontiguousarray(
                 item["y_min"][:, col] * settings.gain + baseline
             )
             hi = np.ascontiguousarray(
                 item["y_max"][:, col] * settings.gain + baseline
             )
-            color = settings.probe.channel_color_u32(
+            color = probe_settings.channel_color_u32(
                 ch_idx,
                 alpha=1.0 if highlighted else 0.9,
                 brighten=_trace_brighten(highlighted),

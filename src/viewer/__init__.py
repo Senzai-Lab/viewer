@@ -9,10 +9,11 @@ from viewer.render import (
     TraceView,
 )
 from viewer.span import Span
-from viewer.stream import Ephys, Spikes, Stream, TimeSeries
+from viewer.stream import BaseStream, Ephys, Spikes, Stream, TimeSeries
 
 __all__ = [
     "show",
+    "BaseStream",
     "Cache",
     "Ephys",
     "EphysView",

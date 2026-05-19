@@ -46,4 +46,4 @@ if __name__ == "__main__":
         units="a.u.",
     )
 
-    show([(ephys, EphysView(ephys))], title="Probe Widget Demo")
+    show([(ephys, EphysView())], title="Probe Widget Demo")

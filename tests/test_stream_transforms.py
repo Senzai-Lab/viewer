@@ -4,7 +4,7 @@ from concurrent.futures import Future
 
 import numpy as np
 
-from viewer import Cache, Ephys, HeatmapView, RasterView, Span, Spikes, TimeSeries, TraceView, show
+from viewer import BaseStream, Cache, Ephys, HeatmapView, RasterView, Span, Spikes, TimeSeries, TraceView, show
 from viewer.render.heatmap import iter_heatmap_visible
 from viewer.transforms import Bandpass, CAR, Compose, FFT, Highpass, Lowpass
 
@@ -23,6 +23,7 @@ class _TinyStream:
 
 
 def test_public_imports():
+    assert BaseStream is not None
     assert HeatmapView is not None
     assert Cache is not None
     assert RasterView is not None

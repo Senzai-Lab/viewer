@@ -36,7 +36,7 @@ if __name__ == "__main__":
     )
 
     show(
-        [(ephys, EphysView(geometry, gain=1 / 40))],
+        [(ephys, EphysView(gain=1 / 40))],
         title="eeg",
         span=1,
     )

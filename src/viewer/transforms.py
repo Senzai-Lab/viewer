@@ -8,28 +8,22 @@ from scipy import signal
 
 class Compose:
     def __init__(self, *transforms):
-        if len(transforms) == 1 and not _is_transform(transforms[0]):
-            transforms = tuple(transforms[0])
         self.transforms = list(transforms)
 
     @property
     def pad_s(self) -> float:
-        return max((float(getattr(t, "pad_s", 0.0)) for t in self.transforms), default=0.0)
+        return max(float(t.pad_s) for t in self.transforms)
 
     def setup(self, stream) -> dict:
         meta = {}
         for transform in self.transforms:
-            setup = getattr(transform, "setup", None)
-            if setup is not None:
-                meta.update(setup(stream) or {})
+            meta.update(transform.setup(stream))
         return meta
 
     def output_nbytes(self, stream, source_samples: int) -> int:
         nbytes = source_samples * stream.source_n_channels * np.dtype(stream.dtype).itemsize
         for transform in self.transforms:
-            output_nbytes = getattr(transform, "output_nbytes", None)
-            if output_nbytes is not None:
-                nbytes = int(output_nbytes(stream, source_samples))
+            nbytes = int(transform.output_nbytes(stream, source_samples))
         return nbytes
 
     def __call__(self, data: np.ndarray, ctx: dict) -> dict:
@@ -38,18 +32,13 @@ class Compose:
             call_ctx = dict(ctx)
             call_ctx.update(result)
             output = transform(result["data"], call_ctx)
-            if isinstance(output, dict):
-                result.update(output)
-            else:
-                result["data"] = output
+            result.update(output)
         return result
 
     def draw_settings(self, stream) -> bool:
         changed = False
         for transform in self.transforms:
-            draw_settings = getattr(transform, "draw_settings", None)
-            if draw_settings is not None:
-                changed |= bool(draw_settings(stream))
+            changed |= transform.draw_settings(stream)
         return changed
 
 
@@ -125,6 +114,9 @@ class _SOSFilter:
     def output_nbytes(self, stream, source_samples: int) -> int:
         dtype = np.result_type(stream.source_dtype, np.float32)
         return source_samples * stream.source_n_channels * np.dtype(dtype).itemsize
+
+    def draw_settings(self, stream) -> bool:
+        return False
 
     def __call__(self, data: np.ndarray, ctx: dict) -> dict:
         if self.zero_phase:
@@ -340,7 +332,3 @@ class FFT:
         if changed:
             self.channel = channel
         return changed
-
-
-def _is_transform(value) -> bool:
-    return callable(value) or hasattr(value, "setup")
