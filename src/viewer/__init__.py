@@ -4,7 +4,7 @@ from viewer.render import (
     EventBars,
     EphysView,
     HeatmapView,
-    ProbeSettings,
+    ProbeView,
     RasterView,
     TraceView,
 )
@@ -19,7 +19,7 @@ __all__ = [
     "EphysView",
     "EventBars",
     "HeatmapView",
-    "ProbeSettings",
+    "ProbeView",
     "RasterView",
     "Span",
     "Spikes",

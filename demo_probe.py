@@ -1,6 +1,6 @@
 import numpy as np
 
-from viewer import Ephys, EphysView, show
+from viewer import Ephys, EphysView, ProbeView, show
 
 
 def make_geometry(n_shanks=4, contacts_per_shank=96):
@@ -46,4 +46,4 @@ if __name__ == "__main__":
         units="a.u.",
     )
 
-    show([(ephys, EphysView())], title="Probe Widget Demo")
+    show([(ephys, EphysView(probe=ProbeView(geometry)))], title="Probe Widget Demo")

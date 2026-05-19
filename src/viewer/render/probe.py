@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 from imgui_bundle import imgui, implot
 
@@ -10,12 +12,13 @@ HOVER_U32 = 0xFF6BE6FF
 HOVER_BRIGHTEN = 0.45
 
 
-class ProbeSettings:
+class ProbeView:
     def __init__(
         self,
         geometry: dict,
         shank_gap: int = 4,
         plot_shank_gap: float = 4.0,
+        visible_channels: Sequence[int] | np.ndarray | None = None,
     ):
         self.channel_ids = np.asarray(geometry["channel_ids"])
         self.shank_ids = np.asarray(geometry["shank_ids"])
@@ -44,6 +47,8 @@ class ProbeSettings:
             self.y,
             shank_gap,
         )
+        if visible_channels is not None:
+            self.set_visible_channels(visible_channels)
 
     def toggle_shank(self, shank: int):
         mask = self.shank_ids == shank
@@ -51,6 +56,12 @@ class ProbeSettings:
 
     def toggle_ch(self, ch: int):
         self.visible[ch] = ~self.visible[ch]
+
+    def set_visible_channels(
+        self,
+        channel_ids: Sequence[int] | np.ndarray,
+    ) -> None:
+        self.visible[:] = np.isin(self.channel_ids, np.asarray(channel_ids))
 
     def channel_label(self, ch: int) -> str:
         return f"ch {int(self.channel_ids[ch])}"
@@ -194,7 +205,7 @@ def _hit_rect(mouse: imgui.ImVec2, p1: imgui.ImVec2, p2: imgui.ImVec2) -> bool:
 
 
 def _contact_rects(
-    settings: ProbeSettings,
+    settings: ProbeView,
     origin: imgui.ImVec2,
     cell: float,
     contact_px: float,
@@ -254,7 +265,7 @@ def color_u32(color: imgui.ImVec4) -> int:
 
 def _draw_contacts(
     draw: imgui.ImDrawList,
-    settings: ProbeSettings,
+    settings: ProbeView,
     rects: list[tuple[imgui.ImVec2, imgui.ImVec2]],
 ):
     for i, (p1, p2) in enumerate(rects):
@@ -269,7 +280,7 @@ def _draw_contacts(
 
 def draw_widget(
     name: str,
-    settings: ProbeSettings,
+    settings: ProbeView,
     *,
     height: float = 480.0,
     contact_px: float = 12.0,

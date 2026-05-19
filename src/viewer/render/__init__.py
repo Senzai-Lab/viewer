@@ -1,7 +1,7 @@
 from .event_bars import EventBars
 from .ephys import EphysView
 from .heatmap import HeatmapView
-from .probe import ProbeSettings
+from .probe import ProbeView
 from .timeseries import TraceView
 from .units import RasterView
 
@@ -9,7 +9,7 @@ __all__ = [
     "EventBars",
     "EphysView",
     "HeatmapView",
-    "ProbeSettings",
+    "ProbeView",
     "RasterView",
     "TraceView",
 ]

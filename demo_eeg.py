@@ -1,4 +1,4 @@
-from viewer import Ephys, EphysView, show
+from viewer import Ephys, EphysView, ProbeView, show
 from viewer.utils import load_env, load_probeinterface
 from pathlib import Path
 import numpy as np
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     )
 
     show(
-        [(ephys, EphysView(gain=1 / 40))],
+        [(ephys, EphysView(probe=ProbeView(geometry), gain=1 / 40))],
         title="eeg",
         span=1,
     )
