@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import numpy as np
 
-from viewer.utils import save_filtered_units
+from viewer.utils import filter_units
 
 
-def test_save_filtered_units_filters_parallel_spike_arrays(tmp_path):
+def test_filter_units_filters_parallel_spike_arrays(tmp_path):
     spike_times = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
     spike_units = np.array([4, 2, 7, 4, 9])
     unit_ids = np.array([4, 7])
 
-    summary = save_filtered_units(
+    summary = filter_units(
         spike_times,
         spike_units,
         unit_ids,

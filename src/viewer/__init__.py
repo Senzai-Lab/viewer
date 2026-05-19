@@ -1,24 +1,29 @@
-from viewer.app import run_viewer
+from viewer.app import show
+from viewer.cache import Cache
 from viewer.render import (
     EventBars,
-    EphysSettings,
-    HeatmapSettings,
+    EphysView,
+    HeatmapView,
     ProbeSettings,
-    TimeSeriesSettings,
-    UnitsSettings,
+    RasterView,
+    TraceView,
 )
-from viewer.stream import Ephys, Stream, TimeSeries, Units
+from viewer.span import Span
+from viewer.stream import BaseStream, Ephys, Spikes, Stream, TimeSeries
 
 __all__ = [
-    "run_viewer",
+    "show",
+    "BaseStream",
+    "Cache",
     "Ephys",
-    "EphysSettings",
+    "EphysView",
     "EventBars",
-    "HeatmapSettings",
+    "HeatmapView",
     "ProbeSettings",
+    "RasterView",
+    "Span",
+    "Spikes",
     "Stream",
     "TimeSeries",
-    "TimeSeriesSettings",
-    "Units",
-    "UnitsSettings",
+    "TraceView",
 ]

@@ -1,6 +1,6 @@
 import zarr
 
-from viewer import Units, UnitsSettings, run_viewer
+from viewer import RasterView, Spikes, show
 
 
 if __name__ == "__main__":
@@ -8,11 +8,11 @@ if __name__ == "__main__":
 
     units_grp = root["units"]
     metadata = dict(units_grp.attrs)
-    units = Units(
+    spikes = Spikes(
         name="units",
         ts=units_grp["spike_times"],
         spike_units=units_grp["spike_units"],
         unit_ids=metadata.get("unit_ids"),
     )
 
-    run_viewer([(units, UnitsSettings(metadata=metadata))], title="Raster Viewer")
+    show([(spikes, RasterView(metadata=metadata))], title="Raster Viewer")

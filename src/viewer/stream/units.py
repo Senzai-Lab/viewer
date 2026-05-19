@@ -5,8 +5,10 @@ from typing import Any
 
 import numpy as np
 
+from .base import BaseStream
 
-class Units:
+
+class Spikes(BaseStream):
     """Irregular sampled spike times with per-spike unit labels."""
 
     def __init__(
@@ -76,7 +78,7 @@ class Units:
         idx = math.floor((t - self.t_min) / self.chunk_duration)
         return max(0, min(idx, self.n_chunks - 1))
 
-    def load_chunk(self, chunk_idx: int) -> dict:
+    def read(self, chunk_idx: int) -> dict:
         t0 = self.t_min + chunk_idx * self.chunk_duration
         t1 = t0 + self.chunk_duration
 
@@ -91,5 +93,5 @@ class Units:
             "t_stop": t1,
             "ts": times,
             "data": units,
-            "n_bytes": times.nbytes + units.nbytes,
+            "nbytes": times.nbytes + units.nbytes,
         }

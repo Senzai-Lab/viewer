@@ -36,7 +36,7 @@ def iter_heatmap_visible(stream, chunks, t0: float, t1: float):
         }
 
 
-class HeatmapSettings:
+class HeatmapView:
     def __init__(
         self,
         y=None,

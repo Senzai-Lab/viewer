@@ -1,6 +1,6 @@
 import zarr
 
-from viewer import EventBars, TimeSeries, TimeSeriesSettings, Units, UnitsSettings, run_viewer
+from viewer import EventBars, RasterView, Spikes, TimeSeries, TraceView, show
 
 root = zarr.open("/Users/iii9781/viewer/scripts/exp1.zarr", mode="r")
 
@@ -21,7 +21,7 @@ pupil = TimeSeries(
 )
 
 units_metadata = dict(root["units"].attrs)
-units = Units(
+spikes = Spikes(
     name="units",
     ts=root["units/spike_times"],
     spike_units=root["units/spike_units"],
@@ -44,11 +44,11 @@ behavior = EventBars(
     },
 )
 
-run_viewer(
+show(
     [
-        (ephys, TimeSeriesSettings()),
-        (pupil, TimeSeriesSettings()),
-        (units, UnitsSettings(metadata=units_metadata)),
+        (ephys, TraceView()),
+        (pupil, TraceView()),
+        (spikes, RasterView(metadata=units_metadata)),
     ],
     event_bars=behavior,
     span=5.0,

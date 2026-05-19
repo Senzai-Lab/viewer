@@ -5,8 +5,10 @@ from typing import Any
 import math
 import numpy as np
 
+from .base import BaseStream
 
-class Ephys:
+
+class Ephys(BaseStream):
     """Sample-clocked high-density electrophysiology data with probe geometry."""
 
     def __init__(
@@ -20,12 +22,12 @@ class Ephys:
         scale: float = 1.0,
         offset: float = 0.0,
         units: str = "a.u.",
-        transform=None,
     ):
         self.name = name
         self.values = values
         self.ts = None
-        self.transform = transform
+        self.source = self
+        self.transforms = None
 
         self.source_fs = float(fs)
         self.fs = self.source_fs
@@ -51,9 +53,31 @@ class Ephys:
         self.scale = float(scale)
         self.offset = float(offset)
         self.units = units
-        self.setup_transform()
+        self.setup_pipe()
 
-    def setup_transform(self):
+    def pipe(self, *transforms, name: str) -> "Ephys":
+        from viewer.transforms import Compose
+
+        stream = Ephys(
+            name,
+            self.values,
+            self.geometry,
+            fs=self.source_fs,
+            chunk_samples=self.chunk_samples,
+            scale=self.scale,
+            offset=self.offset,
+            units=self.units,
+        )
+        stream.source = self.source
+        stream.transforms = (
+            Compose(*transforms)
+            if self.transforms is None
+            else Compose(self.transforms, *transforms)
+        )
+        stream.setup_pipe()
+        return stream
+
+    def setup_pipe(self):
         self.fs = self.source_fs
         self.n_channels = self.source_n_channels
         self.dtype = np.dtype(np.result_type(self.source_dtype, np.float32))
@@ -62,27 +86,21 @@ class Ephys:
             self.chunk_samples * self.n_channels * np.dtype(self.dtype).itemsize
         )
 
-        if self.transform is None:
+        if self.transforms is None:
             return
 
-        setup = getattr(self.transform, "setup", None)
-        meta = setup(self) if setup is not None else {}
-        meta = {} if meta is None else meta
+        meta = self.transforms.setup(self)
 
         self.fs = float(meta.get("fs", self.fs))
         self.n_channels = int(meta.get("n_channels", self.n_channels))
-        if "dtype" in meta:
-            self.dtype = np.dtype(meta["dtype"])
+        self.dtype = np.dtype(meta["dtype"])
         self.y = meta.get("y", self.y)
 
-        output_nbytes = getattr(self.transform, "output_nbytes", None)
         if "chunk_nbytes" in meta:
             self.chunk_nbytes = int(meta["chunk_nbytes"])
-        elif output_nbytes is not None:
-            self.chunk_nbytes = int(output_nbytes(self, self.chunk_samples))
         else:
-            self.chunk_nbytes = (
-                self.chunk_samples * self.n_channels * np.dtype(self.dtype).itemsize
+            self.chunk_nbytes = int(
+                self.transforms.output_nbytes(self, self.chunk_samples)
             )
 
     def chunk_at(self, t: float) -> int:
@@ -90,12 +108,12 @@ class Ephys:
         chunk_idx = sample_idx // self.chunk_samples
         return max(0, min(chunk_idx, self.n_chunks - 1))
 
-    def load_chunk(self, chunk_idx: int) -> dict:
+    def read(self, chunk_idx: int) -> dict:
         start = chunk_idx * self.chunk_samples
         stop = min(start + self.chunk_samples, self.n_samples)
         pad = 0
-        if self.transform is not None:
-            pad = math.ceil(float(getattr(self.transform, "pad_s", 0.0)) * self.source_fs)
+        if self.transforms is not None:
+            pad = math.ceil(float(self.transforms.pad_s) * self.source_fs)
         read_start = max(0, start - pad)
         read_stop = min(self.n_samples, stop + pad)
 
@@ -103,7 +121,7 @@ class Ephys:
         data *= self.scale
         data += self.offset
 
-        if self.transform is not None:
+        if self.transforms is not None:
             ctx = {
                 "stream": self,
                 "source_fs": self.source_fs,
@@ -113,7 +131,7 @@ class Ephys:
                 "read_start": read_start,
                 "read_stop": read_stop,
             }
-            output = self.transform(data, ctx)
+            output = self.transforms(data, ctx)
             return self._chunk_from_transform(output, start, stop, read_start, read_stop)
 
         return {
@@ -123,7 +141,7 @@ class Ephys:
             "sample_stop": stop,
             "fs": self.source_fs,
             "dt": 1.0 / self.source_fs,
-            "n_bytes": data.nbytes,
+            "nbytes": data.nbytes,
             "data": data,
         }
 
@@ -135,16 +153,12 @@ class Ephys:
         read_start: int,
         read_stop: int,
     ) -> dict:
-        if not isinstance(output, dict):
-            output = {"data": output}
-
         data = output["data"]
         if "sample_start" not in output:
             i0 = start - read_start
             i1 = i0 + (stop - start)
             data = data[i0:i1]
-            output = {
-                **output,
+            return {
                 "data": data,
                 "sample_start": start,
                 "sample_stop": stop,
@@ -152,6 +166,9 @@ class Ephys:
                 "t_stop": self.t_min + stop / self.fs,
                 "fs": self.fs,
                 "dt": 1.0 / self.fs,
+                "source_sample_start": read_start,
+                "source_sample_stop": read_stop,
+                "nbytes": data.nbytes,
             }
 
         payload = {
@@ -167,7 +184,7 @@ class Ephys:
         }
         if "y" in output:
             payload["y"] = output["y"]
-        payload["n_bytes"] = output.get("n_bytes", payload["data"].nbytes)
+        payload["nbytes"] = output["nbytes"]
         return payload
 
     def iter_visible_channels(

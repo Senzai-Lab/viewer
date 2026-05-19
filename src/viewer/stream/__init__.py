@@ -1,7 +1,7 @@
-from .base import Stream
+from .base import BaseStream, Stream
 from .ephys import Ephys
 from .timeseries import TimeSeries
-from .units import Units
+from .units import Spikes
 
 
-__all__ = ["Stream", "Ephys", "TimeSeries", "Units"]
+__all__ = ["BaseStream", "Stream", "Ephys", "TimeSeries", "Spikes"]

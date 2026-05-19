@@ -36,6 +36,8 @@ class ProbeSettings:
             plot_shank_gap,
         )
         self._custom_colors = geometry_colors(geometry, self.n_channels)
+        self._base_colors: list[imgui.ImVec4] | None = None
+        self._u32_cache: dict[tuple[int, float, float], int] = {}
         self.xg, self.yg = prb_to_grid(
             self.shank_ids,
             self.x,
@@ -60,16 +62,13 @@ class ProbeSettings:
         alpha: float = 1.0,
         brighten: float = 0.0,
     ) -> imgui.ImVec4:
-        if self._custom_colors is not None:
-            return apply_color_alpha_brighten(
-                self._custom_colors[ch],
-                alpha=alpha,
-                brighten=brighten,
-            )
-
-        shank = int(self.shank_ids[ch])
-        color_idx = self._shank_color_indices[shank]
-        return shank_color_vec(color_idx, alpha=alpha, brighten=brighten)
+        if alpha == 1.0 and brighten == 0.0:
+            return self._base_color(ch)
+        return apply_color_alpha_brighten(
+            self._base_color(ch),
+            alpha=alpha,
+            brighten=brighten,
+        )
 
     def channel_color_u32(
         self,
@@ -78,7 +77,23 @@ class ProbeSettings:
         alpha: float = 1.0,
         brighten: float = 0.0,
     ) -> int:
-        return color_u32(self.channel_color_vec(ch, alpha=alpha, brighten=brighten))
+        key = (int(ch), float(alpha), float(brighten))
+        if key not in self._u32_cache:
+            self._u32_cache[key] = color_u32(
+                self.channel_color_vec(ch, alpha=alpha, brighten=brighten)
+            )
+        return self._u32_cache[key]
+
+    def _base_color(self, ch: int) -> imgui.ImVec4:
+        if self._base_colors is None:
+            if self._custom_colors is not None:
+                self._base_colors = self._custom_colors
+            else:
+                self._base_colors = [
+                    shank_color_vec(self._shank_color_indices[int(shank)])
+                    for shank in self.shank_ids
+                ]
+        return self._base_colors[ch]
 
 
 def prb_to_grid(

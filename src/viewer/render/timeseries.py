@@ -7,7 +7,7 @@ from viewer.stream import TimeSeries
 from viewer.ui import draw_cursor, setup_time_axis
 
 
-class TimeSeriesSettings:
+class TraceView:
     def __init__(
         self,
         *,
