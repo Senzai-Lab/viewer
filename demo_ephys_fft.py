@@ -30,7 +30,12 @@ if __name__ == "__main__":
     data_path = Path(load_env()["EPHYS_DATA_PATH"])
     geometry = load_probeinterface(data_path / "concat" / "probe.json")
     data = load_bin(data_path / "eeg" / "eeg.dat")
-    units_metadata = pd.read_csv("./scripts/units.csv").to_dict()
+    units_df = pd.read_csv("./scripts/units.csv")
+    unit_ids = units_df['unit_ids'].values
+    units_metadata = {
+        "unit_ids": unit_ids,
+        "unit_display_y": units_df['unit_display_y'].values,
+    }
 
     fs = 1250.0
     
@@ -38,13 +43,13 @@ if __name__ == "__main__":
     fft_stream = Ephys("fft1", data, geometry, fs=fs, chunk_samples=int(10 * fs), units="uV", scale=0.195,
         transform=Compose(
             Bandpass(1.0, 125.0),
-            FFT(channel=100, window_s=0.2, step_s=0.05, freq_min=1.0, freq_max=100.0, log_power=True,),
+            FFT(channel=100, window_s=0.2, step_s=0.025, freq_min=1.0, freq_max=100.0, log_power=True,),
             ),
     )
 
     units = Units(
         "units",
-        ts=np.load("spike_times.npy"),
+        ts=np.load("spike_times.npy") / 30_000.0,
         spike_units=np.load("spike_units.npy", mmap_mode="r"),
         unit_ids=units_metadata['unit_ids'],)
 
