@@ -4,6 +4,7 @@ from .heatmap import HeatmapView
 from .probe import ProbeView
 from .timeseries import TraceView
 from .units import RasterView
+from .video import VideoView
 
 __all__ = [
     "EventBars",
@@ -12,4 +13,5 @@ __all__ = [
     "ProbeView",
     "RasterView",
     "TraceView",
+    "VideoView",
 ]

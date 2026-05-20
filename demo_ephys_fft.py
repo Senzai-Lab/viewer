@@ -46,7 +46,7 @@ if __name__ == "__main__":
     show(
         [
             (raw_stream, EphysView(probe=probe_view, gain=1 / 40)),
-            (fft_stream, HeatmapView("Frequency (Hz)", cmap="Viridis", auto_scale=True)),
+            (fft_stream, HeatmapView(y_label="Frequency (Hz)", cmap="Viridis", auto_scale=True)),
             (spikes, RasterView(metadata=units_metadata, sort_by="unit_display_y")),
         ],
         title="sSC view",

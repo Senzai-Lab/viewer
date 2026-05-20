@@ -7,9 +7,10 @@ from viewer.render import (
     ProbeView,
     RasterView,
     TraceView,
+    VideoView,
 )
 from viewer.span import Span
-from viewer.stream import BaseStream, Ephys, Spikes, Stream, TimeSeries
+from viewer.stream import BaseStream, Ephys, Spikes, Stream, TimeSeries, Video
 
 __all__ = [
     "show",
@@ -26,4 +27,6 @@ __all__ = [
     "Stream",
     "TimeSeries",
     "TraceView",
+    "Video",
+    "VideoView",
 ]
