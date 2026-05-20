@@ -148,7 +148,7 @@ def plot_y_positions(
     for shank in np.unique(shank_ids):
         mask = shank_ids == shank
         indices = np.flatnonzero(mask)
-        order = indices[np.lexsort((indices, x[indices], y[indices]))]
+        order = indices[np.lexsort((indices, x[indices], -y[indices]))]
         plot_y[order] = cursor + np.arange(len(order), dtype=np.float32)
         cursor += len(order) + shank_gap
 

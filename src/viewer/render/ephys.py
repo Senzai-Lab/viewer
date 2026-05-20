@@ -5,7 +5,7 @@ from imgui_bundle import imgui, implot
 
 from . import probe as probe_render
 from viewer.stream import Ephys
-from viewer.ui import setup_time_axis
+from viewer.ui import draw_cursor, setup_time_axis
 
 
 class EphysView:
@@ -111,6 +111,7 @@ class EphysView:
 
             for overlay in overlays:
                 overlay.draw_overlay()
+            draw_cursor(t)
             implot.end_plot()
 
 
