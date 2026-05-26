@@ -31,8 +31,8 @@ if __name__ == "__main__":
     probe_view = ProbeView(geometry, visible_channels=np.arange(fft_channel - 4, fft_channel + 5),)
 
     fft_stream = raw_stream.pipe(
-        Bandpass(1.0, 125.0),
-        FFT(channel=fft_channel, window_s=0.2, step_s=0.01, freq_min=1.0, freq_max=100.0, log_power=True),
+        Bandpass(1.0, 225.0),
+        FFT(channel=fft_channel, window_s=0.2, step_s=0.01, freq_min=1.0, freq_max=200.0, log_power=True),
         name="fft1",
         )
     

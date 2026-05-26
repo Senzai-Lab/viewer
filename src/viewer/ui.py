@@ -156,7 +156,7 @@ def draw_cursor(
 
 
 def draw_stream_debug(cache, stream, t: float):
-    current = stream.chunk_at(t)
+    current = stream.at(t)
     cached = cache.cached_indices(stream)
     pending = cache.pending_indices(stream)
     wanted = cache.wanted_indices(stream)

@@ -45,13 +45,6 @@ class Cache:
         self.streams[stream.name] = stream
         self.wanted[stream.name] = set()
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        self.close()
-        return False
-
     def __contains__(self, key) -> bool:
         return self._key(*key) in self.cache
 
@@ -99,7 +92,7 @@ class Cache:
         stream = self.streams[stream.name]
         indices = self._chunk_indices(stream, t)
         wanted = set(indices)
-        center = stream.chunk_at(t)
+        center = stream.at(t)
         stream_name = stream.name
 
         self.wanted[stream_name] = wanted
@@ -136,7 +129,7 @@ class Cache:
         return chunks
 
     def _chunk_indices(self, stream: Stream, t: float) -> list[int]:
-        center = stream.chunk_at(t)
+        center = stream.at(t)
 
         start = max(0, center - 1)
         stop = min(stream.n_chunks, center + 2)

@@ -4,24 +4,6 @@ from typing import Any, Protocol
 
 from viewer.span import Span
 
-
-def chunks_in_span(stream: Stream, span: Span) -> range:
-    start = stream.chunk_at(span.t0)
-    stop = stream.chunk_at(span.t1)
-    return range(start, stop + 1)
-
-
-def read_key(stream: Stream, key: int | slice) -> dict | list[dict]:
-    if isinstance(key, slice):
-        return [stream.read(i) for i in range(*key.indices(stream.n_chunks))]
-
-    if key < 0:
-        key += stream.n_chunks
-    if key < 0 or key >= stream.n_chunks:
-        raise IndexError(key)
-    return stream.read(key)
-
-
 class BaseStream:
     transforms = None
 
@@ -30,19 +12,19 @@ class BaseStream:
         return Span(self.t_min, self.t_max)
 
     def chunks_in(self, span: Span) -> range:
-        return chunks_in_span(self, span)
-
-    def at(self, t: float) -> dict:
-        return self.read(self.chunk_at(t))
-
-    def in_span(self, span: Span) -> list[dict]:
-        return [self.read(i) for i in self.chunks_in(span)]
+        start = self.at(span.t0)
+        stop = self.at(span.t1)
+        return range(start, stop + 1)
 
     def __len__(self) -> int:
         return self.n_chunks
 
-    def __getitem__(self, key: int | slice) -> dict | list[dict]:
-        return read_key(self, key)
+    def __getitem__(self, key: int) -> dict:
+        if key < 0:
+            key += self.n_chunks
+        if key < 0 or key >= self.n_chunks:
+            raise IndexError(key)
+        return self.read(key)
 
 
 class Stream(Protocol):
@@ -54,7 +36,7 @@ class Stream(Protocol):
     chunk_nbytes: int
     transforms: Any | None
 
-    def chunk_at(self, t: float) -> int: ...
+    def at(self, t: float) -> int: ...
     def chunks_in(self, span: Span) -> range: ...
     def read(self, chunk_idx: int) -> dict: ...
-    def __getitem__(self, key: int | slice) -> dict | list[dict]: ...
+    def __getitem__(self, key: int) -> dict: ...

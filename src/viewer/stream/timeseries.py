@@ -118,7 +118,7 @@ class TimeSeries(BaseStream):
                 stride * dt,
             )
 
-    def chunk_at(self, t: float) -> int:
+    def at(self, t: float) -> int:
         sample_idx = math.floor((t - self.t_min) * self.source_fs)
         chunk_idx = sample_idx // self.chunk_samples
         return max(0, min(chunk_idx, self.n_chunks - 1))

@@ -45,7 +45,7 @@ class Video(BaseStream):
         frame_nbytes = self.width * self.height * 3
         self.chunk_nbytes = frames_per_chunk * (frame_nbytes + 8)
 
-    def chunk_at(self, t: float) -> int:
+    def at(self, t: float) -> int:
         chunk_idx = math.floor((t - self.t_min) / self.chunk_duration)
         return max(0, min(chunk_idx, self.n_chunks - 1))
 

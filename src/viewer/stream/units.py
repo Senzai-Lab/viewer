@@ -74,7 +74,7 @@ class Spikes(BaseStream):
                 unit_ids[keep],
             )
 
-    def chunk_at(self, t: float) -> int:
+    def at(self, t: float) -> int:
         idx = math.floor((t - self.t_min) / self.chunk_duration)
         return max(0, min(idx, self.n_chunks - 1))
 
